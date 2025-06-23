@@ -54,123 +54,102 @@ const ChatSidebar: React.FC = () => {
 
 
   if (!isSidebarOpen) {
-    // Optionally render a button to open the sidebar if it's closed,
-    // or handle this in the main layout. For now, it just won't render if closed.
-    // This logic might be better in the parent layout component.
     return null;
   }
 
-  // 折叠（极窄）模式
-  if (isSidebarCollapsed) {
-    return (
-      <aside className="w-14 bg-gray-100 dark:bg-gray-900 p-2 flex flex-col h-full border-r border-accent items-center">
+  return (
+    <aside className={classNames(
+      "bg-gray-50 dark:bg-gray-900/80 backdrop-blur-sm flex flex-col h-full border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out",
+      {
+        "w-72 p-4": !isSidebarCollapsed,
+        "w-16 p-2 items-center": isSidebarCollapsed,
+      }
+    )}>
+      {/* Header */}
+      <div className={classNames("flex items-center mb-4", { "justify-between": !isSidebarCollapsed, "justify-center": isSidebarCollapsed })}>
+        {!isSidebarCollapsed && <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">对话列表</h1>}
         <Button
           onClick={handleCreateNewChat}
           variant="ghost"
           size="icon"
-          className="mb-2"
+          className="text-gray-500 hover:text-primary"
           title="新对话"
         >
           <PlusCircle size={22} />
         </Button>
-        <div className="flex-grow flex flex-col items-center justify-center">
-          {/* 可扩展：显示当前激活会话的图标 */}
-        </div>
-        <Button
-          onClick={toggleSidebarCollapsed}
-          variant="ghost"
-          size="icon"
-          className="mb-2"
-          title="展开侧边栏"
-        >
-          <ChevronRight size={22} />
-        </Button>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          title="设置"
-          className="mb-2"
-        >
-          <a href="/providers">
-            <Settings size={20} />
-          </a>
-        </Button>
-      </aside>
-    );
-  }
+      </div>
 
-  return (
-    <aside className="w-64 md:w-72 bg-gray-100 dark:bg-gray-900 p-4 flex flex-col h-full border-r border-accent relative">
-      {/* 折叠按钮 */}
-      <Button
-        onClick={toggleSidebarCollapsed}
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 right-2 z-10"
-        title="折叠侧边栏"
-      >
-        <ChevronLeft size={22} />
-      </Button>
-      <Button
-        onClick={handleCreateNewChat}
-        variant="outline"
-        className="w-full mb-4"
-      >
-        <PlusCircle size={18} className="mr-2" />
-        新对话
-      </Button>
-      <div className="flex-grow overflow-y-auto space-y-2 pr-1 -mr-1"> {/* Negative margin for scrollbar */}
-        {chatSessions.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((session) => (
+      {/* Chat List */}
+      <div className="flex-grow overflow-y-auto space-y-1">
+        {chatSessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map((session) => (
           <Link
             href={`/chat/${session.id}`}
             key={session.id}
             onClick={() => {
               setActiveChatId(session.id);
-              if (window.innerWidth < 768) toggleSidebar(); // Close on mobile
+              if (window.innerWidth < 768) toggleSidebar();
             }}
+            title={session.title}
             className={classNames(
-              "flex items-center justify-between p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 group",
+              "flex items-center justify-between p-2 rounded-lg group transition-colors duration-150",
               {
-                "bg-primary/20 dark:bg-primary/30 text-primary-foreground": activeChatId === session.id,
-                "text-gray-700 dark:text-gray-300": activeChatId !== session.id,
+                "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300": activeChatId === session.id,
+                "hover:bg-gray-200/70 dark:hover:bg-gray-800/60 text-gray-700 dark:text-gray-300": activeChatId !== session.id,
+                "justify-center": isSidebarCollapsed,
               }
             )}
           >
             <div className="flex items-center overflow-hidden">
-              <MessageSquareText size={18} className="mr-2 shrink-0" />
-              <span className="truncate text-sm">{session.title}</span>
+              <MessageSquareText size={18} className="shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate text-sm ml-3">{session.title}</span>}
             </div>
-            <div className="flex shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-7 w-7" title="重命名" onClick={(e) => handleRenameChat(e, session.id, session.title)}>
-                <Edit2 size={14} />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" title="删除" onClick={(e) => handleDeleteChat(e, session.id)}>
-                <Trash2 size={14} />
-              </Button>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex shrink-0 opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+                <Button variant="ghost" size="icon" className="h-6 w-6" title="重命名" onClick={(e) => handleRenameChat(e, session.id, session.title)}>
+                  <Edit2 size={14} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-600" title="删除" onClick={(e) => handleDeleteChat(e, session.id)}>
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            )}
           </Link>
         ))}
-        {chatSessions.length === 0 && (
+        {chatSessions.length === 0 && !isSidebarCollapsed && (
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
-            还没有对话。点击“新对话”开始吧！
+            点击 "+" 开始新对话
           </p>
         )}
       </div>
-      {/* Settings Link */}
-      <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-        <Link
-          href="/providers" // Or a general /settings landing page if created
-          onClick={() => {
-            if (window.innerWidth < 768 && isSidebarOpen) toggleSidebar(); // Close on mobile
-          }}
-          className="flex items-center p-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-        >
-          <Settings size={18} className="mr-3" />
-          设置
-        </Link>
+
+      {/* Footer */}
+      <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-800">
+        <div className="space-y-1">
+          <Link
+            href="/providers"
+            onClick={() => { if (window.innerWidth < 768 && isSidebarOpen) toggleSidebar(); }}
+            className={classNames(
+              "flex items-center p-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/70 dark:hover:bg-gray-800/60",
+              { "justify-center": isSidebarCollapsed }
+            )}
+          >
+            <Settings size={18} className="shrink-0" />
+            {!isSidebarCollapsed && <span className="ml-3">设置</span>}
+          </Link>
+          <Button
+            onClick={toggleSidebarCollapsed}
+            variant="ghost"
+            className={classNames(
+              "w-full flex items-center p-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200/70 dark:hover:bg-gray-800/60",
+              { "justify-center": isSidebarCollapsed }
+            )}
+            title={isSidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+          >
+            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {!isSidebarCollapsed && <span className="ml-3">{isSidebarCollapsed ? "" : "折叠"}</span>}
+          </Button>
+        </div>
       </div>
-      {/* Optional: User settings / profile link at the bottom */}
     </aside>
   );
 };

@@ -37,6 +37,7 @@ export interface ChatStoreState {
       | "stream"
       | "logitBias"
       | "user"
+      | "jsonSchema"
     >>
   ) => void;
   setActiveChatId: (sessionId: string | null) => void;

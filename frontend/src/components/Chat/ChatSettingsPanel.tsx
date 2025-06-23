@@ -33,6 +33,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
   const [stream, setStream] = useState<boolean>(activeChatSession?.stream ?? true);
   const [user, setUser] = useState<string | undefined>(activeChatSession?.user);
   const [logitBiasInput, setLogitBiasInput] = useState<string>(activeChatSession?.logitBias ? JSON.stringify(activeChatSession.logitBias, null, 2) : "");
+  const [jsonSchemaInput, setJsonSchemaInput] = useState<string>("");
   const [systemPrompt, setSystemPrompt] = useState<string | undefined>(activeChatSession?.systemPrompt);
   const [stopSequencesInput, setStopSequencesInput] = useState<string>("");
   const [sessionEnabledMcpServerIds, setSessionEnabledMcpServerIds] = useState<string[]>([]);
@@ -49,6 +50,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
       setStream(activeChatSession.stream ?? true);
       setUser(activeChatSession.user ?? "");
       setLogitBiasInput(activeChatSession.logitBias ? JSON.stringify(activeChatSession.logitBias, null, 2) : "");
+      setJsonSchemaInput(activeChatSession.jsonSchema ? JSON.stringify(activeChatSession.jsonSchema, null, 2) : "");
       setSystemPrompt(activeChatSession.systemPrompt ?? "");
       setStopSequencesInput(activeChatSession.stopSequences?.join(', ') || "");
       setSessionEnabledMcpServerIds(activeChatSession.enabledMcpServers || []);
@@ -72,6 +74,16 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         }
       }
 
+      let jsonSchema: Record<string, any> | undefined = undefined;
+      if (structuredOutput && jsonSchemaInput.trim()) {
+        try {
+          jsonSchema = JSON.parse(jsonSchemaInput);
+        } catch (e) {
+          alert("JSON Schema 格式错误，请输入合法的 JSON");
+          return;
+        }
+      }
+
       updateChatSessionSettings(activeChatSession.id, {
         modelId: selectedModelId,
         temperature: temperature ? Number(temperature) : undefined,
@@ -83,6 +95,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         stream,
         user: user?.trim() || undefined,
         logitBias,
+        jsonSchema,
         systemPrompt: systemPrompt?.trim() || undefined,
         stopSequences: stopSequencesArray.length > 0 ? stopSequencesArray : undefined,
         enabledMcpServers: sessionEnabledMcpServerIds.length > 0 ? sessionEnabledMcpServerIds : undefined,
@@ -287,6 +300,19 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
             />
             <Label htmlFor="structured-output" className="ml-2 text-xs">结构化输出 (Structured Output)</Label>
           </div>
+          {structuredOutput && (
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="json-schema">自定义 JSON Schema</Label>
+              <Textarea
+                id="json-schema"
+                value={jsonSchemaInput}
+                onChange={e => setJsonSchemaInput(e.target.value)}
+                placeholder='输入一个OpenAPI schema对象来约束模型输出。有关示例，请参阅API文档。'
+                rows={4}
+                className="text-xs font-mono"
+              />
+            </div>
+          )}
           <div className="space-y-2 flex items-center mt-6">
             <Checkbox
               id="stream"

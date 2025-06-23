@@ -62,6 +62,7 @@ export interface ChatSession {
   user?: string;
   // For MCP integration
   enabledMcpServers?: string[]; // IDs of enabled MCP servers
+  jsonSchema?: Record<string, any>; // For structured output
 }
 
 // For API requests/responses if they differ slightly

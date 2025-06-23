@@ -35,6 +35,11 @@ export interface StandardApiResponse<T = any> {
 
 import type { ToolCall } from "./chat"; // Import ToolCall type
 
+export interface StreamError {
+  message: string;
+  details?: any;
+}
+
 // For streaming chat responses
 export interface ChatStreamChunk {
   id: string; // Message ID or chunk ID
@@ -59,8 +64,7 @@ export interface ChatStreamChunk {
     createdAt: string; // ISO string date
   };
   // For error
-  error_message?: string;
-  error_code?: string;
+  error?: StreamError;
   // For info
   info_message?: string;
 }

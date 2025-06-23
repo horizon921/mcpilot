@@ -3,15 +3,15 @@ import type { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, Content } from '@google/generative-ai'; // Import Gemini SDK
+import Ajv, { ValidationError } from "ajv";
 import type { Message as ChatMessage, MessageRole } from '@/types/chat';
-import type { ChatStreamChunk } from '@/types/api';
+import type { ChatStreamChunk, StreamError } from '@/types/api';
 import type { AIProviderType } from '@/types/config'; // Import AIProviderType
 
 // Note: API keys are read from process.env.
 // For OpenAI: API_KEY_<NORMALIZED_PROVIDER_ID> or OPENAI_API_KEY
 // For Anthropic: API_KEY_<NORMALIZED_PROVIDER_ID> or ANTHROPIC_API_KEY
 // For Gemini: API_KEY_<NORMALIZED_PROVIDER_ID> or GEMINI_API_KEY
-
 interface ChatApiRequest {
   chatId: string;
   messages: ChatMessage[];
@@ -25,6 +25,7 @@ interface ChatApiRequest {
   maxTokens?: number;
   systemPrompt?: string;
   stop?: string[]; // Added for stop sequences
+  jsonSchema?: Record<string, any>;
 }
 
 const mapRoleToOpenAI = (role: MessageRole): OpenAI.Chat.ChatCompletionMessageParam['role'] => {
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as ChatApiRequest;
     const {
       chatId, messages, modelNativeId, providerId, providerType, clientProvidedApiKey, baseUrl,
-      temperature = 0.7, topP, maxTokens, systemPrompt, stop // Added stop
+      temperature = 0.7, topP, maxTokens, systemPrompt, stop, jsonSchema
     } = body;
 
     if (!messages || messages.length === 0) {
@@ -145,7 +146,8 @@ export async function POST(request: NextRequest) {
           temperature,
           max_tokens: maxTokens,
           top_p: topP,
-          stop: stop // Added stop parameter
+          stop: stop, // Added stop parameter
+          response_format: jsonSchema ? { type: "json_object" } : undefined,
         });
         const readableStream = new ReadableStream({
           async start(controller) {
@@ -153,10 +155,12 @@ export async function POST(request: NextRequest) {
             const assistantMsgId = `ai-${Date.now()}`;
             send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
             let accumulatedToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [];
+            let accumulatedContent = "";
 
             for await (const chunk of stream) {
               const choice = chunk.choices[0];
               if (choice?.delta?.content) {
+                accumulatedContent += choice.delta.content;
                 send({ id: assistantMsgId, type: 'content_delta', role: 'assistant', content: choice.delta.content });
               }
               if (choice?.delta?.tool_calls) {
@@ -192,12 +196,35 @@ export async function POST(request: NextRequest) {
                   });
                   accumulatedToolCalls = []; // Reset for safety
                 }
-                // Don't send message_end yet, client will send tool_results back
-                // Or, if we decide the turn ends here and client handles next step:
-                // send({id: assistantMsgId, type: 'message_end', finish_reason: 'tool_calls'});
-                // controller.close(); // Close if turn ends here.
-                // For now, let's assume the stream ends after sending tool_calls,
-                // and client will initiate a new request with tool results.
+              } else if (choice?.finish_reason === 'stop') {
+                if (jsonSchema) {
+                  try {
+                    const parsedContent = JSON.parse(accumulatedContent);
+                    const ajv = new Ajv();
+                    const validate = ajv.compile(jsonSchema);
+                    if (!validate(parsedContent)) {
+                      console.error("JSON Schema validation failed:", validate.errors);
+                      send({
+                        id: assistantMsgId,
+                        type: 'error',
+                        error: {
+                          message: "模型输出不符合自定义的JSON Schema。",
+                          details: ajv.errorsText(validate.errors),
+                        }
+                      });
+                    }
+                  } catch (e) {
+                     console.error("Failed to parse or validate structured output:", e);
+                      send({
+                        id: assistantMsgId,
+                        type: 'error',
+                        error: {
+                          message: "无法解析模型输出为JSON，或验证时发生错误。",
+                          details: e instanceof Error ? e.message : String(e),
+                        }
+                      });
+                  }
+                }
               }
             }
             

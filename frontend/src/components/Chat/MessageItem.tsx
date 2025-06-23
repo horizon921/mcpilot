@@ -394,75 +394,58 @@ const MessageItem: React.FC<MessageItemProps> = ({
   const bubbleCorners = role === "user" ? userBubbleCorners : assistantBubbleCorners;
 
   return (
-    <div ref={messageRootRef} className={classNames("flex mb-4 group w-full", { "justify-end": role === "user" })}>
-      {role !== "user" && <div className="mr-2 md:mr-3 shrink-0 self-end">{getAvatar()}</div>} {/* Avatar at bottom */}
-      <div
-        className={classNames(
-          "p-3 max-w-[85%] md:max-w-[70%] break-words relative shadow-sm",
-          messageBgColor,
-          "rounded-xl", // General rounding
-          bubbleCorners   // Specific corner for tail effect
-        )}
-      >
-        {/* Removed the explicit user/assistant name header for a cleaner look, avatar implies sender */}
-        {/* Time can be shown subtly below the message or on hover */}
-        
-        {renderContent()}
-
-        <div className="text-xs mt-1.5 opacity-70 text-right">
-          {/* Timestamp display - subtle and at the bottom right of the bubble */}
-          {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </div>
-
-        {/* Action buttons - show on hover, but not if editing */}
-        {!isLoading && !isEditing && (content || role === 'assistant') && ( // Show for assistant even if content is null (e.g. for tool_calls or error)
-          <div className="absolute top-0 right-0 mt-1 mr-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-background/70 dark:bg-background/70 p-1 rounded">
-            {onResend && role === "assistant" && (error || content || (message.tool_calls && message.tool_calls.length > 0)) && ( // Allow resend if error, content, or tool_calls are present
-              <button onClick={() => onResend(messageId)} title="重新生成" className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
-                <RefreshCw size={16} />
-              </button>
-            )}
-            {role === "user" && onEditMessage && content && ( // Edit only user messages with content
-              <button
-                onClick={handleEditClick}
-                title="编辑"
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-              >
-                <Edit3 size={16} />
-              </button>
-            )}
-            {content && onCopy && (
-              <button
-                onClick={() => onCopy(content)}
-                title="复制"
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-              >
-                <Copy size={16} />
-              </button>
-            )}
-            {/* Branch button - to be implemented later */}
-            {onBranch && !isLoading && ( // Show if onBranch is provided and message is not loading
-              <button
-                onClick={() => onBranch(messageId)}
-                title="创建分支"
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-              >
-                <GitFork size={16} />
-              </button>
-            )}
-            {onDelete && (
-              <button
-                onClick={() => onDelete(messageId)}
-                title="删除"
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-red-500 hover:text-red-600"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
+    <div ref={messageRootRef} className={classNames("flex flex-col group mb-6", { "items-end": role === "user", "items-start": role !== "user" })}>
+      <div className={classNames("flex w-full", { "justify-end": role === "user" })}>
+        {role !== "user" && <div className="mr-2 md:mr-3 shrink-0 self-end">{getAvatar()}</div>}
+        <div
+          className={classNames(
+            "p-3 max-w-[85%] md:max-w-[70%] break-words relative shadow-sm",
+            messageBgColor,
+            "rounded-xl", // General rounding
+            bubbleCorners   // Specific corner for tail effect
+          )}
+        >
+          {renderContent()}
+          <div className="text-xs mt-1.5 opacity-70 text-right">
+            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
-        )}
+        </div>
+        {role === "user" && <div className="ml-3 shrink-0 self-end">{getAvatar()}</div>}
       </div>
-      {role === "user" && <div className="ml-3 shrink-0">{getAvatar()}</div>}
+
+      {/* Action buttons - show on hover, positioned below the message bubble */}
+      {!isLoading && !isEditing && (content || role === 'assistant') && (
+        <div className={classNames("flex items-center space-x-2 mt-2 transition-opacity duration-200 opacity-0 group-hover:opacity-100", {
+          "pr-12": role === "user", // Align with avatar
+          "pl-12": role !== "user"  // Align with avatar
+        })}>
+          {onResend && role === "assistant" && (error || content || (message.tool_calls && message.tool_calls.length > 0)) && (
+            <button onClick={() => onResend(messageId)} title="重新生成" className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded">
+              <RefreshCw size={14} />
+            </button>
+          )}
+          {role === "user" && onEditMessage && content && (
+            <button onClick={handleEditClick} title="编辑" className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded">
+              <Edit3 size={14} />
+            </button>
+          )}
+          {content && onCopy && (
+            <button onClick={() => onCopy(content)} title="复制" className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded">
+              <Copy size={14} />
+            </button>
+          )}
+          {onBranch && !isLoading && (
+            <button onClick={() => onBranch(messageId)} title="创建分支" className="p-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded">
+              <GitFork size={14} />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={() => onDelete(messageId)} title="删除" className="p-1 text-red-500 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400 rounded">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

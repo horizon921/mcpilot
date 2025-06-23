@@ -7,13 +7,14 @@ import MessageInput from '@/components/Chat/MessageInput'; // Re-add MessageInpu
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUIStore } from '@/store/uiStore'; // Import useUIStore
-import ChatSettingsPanel from '@/components/Chat/ChatSettingsPanel'; // Import ChatSettingsPanel
-import ChatDetailPanel from '@/components/Chat/ChatDetailPanel'; // Import ChatDetailPanel
 import { Button } from '@/components/Common/Button'; // Import Button component
 import type { Message as MessageType } from '@/types/chat'; // Renamed to avoid conflict with React's Message type
 import { toast } from "sonner"; // For copy feedback
 import { v4 as uuidv4 } from 'uuid';
 import { Settings } from 'lucide-react'; // Import Settings icon for the new button
+import dynamic from 'next/dynamic';
+
+const ChatDetailPanel = dynamic(() => import('@/components/Chat/ChatDetailPanel'), { ssr: false });
 
 // A placeholder for a user ID, in a real app this would come from auth
 const TEMP_USER_ID = "user-123";
@@ -380,8 +381,8 @@ export default function ChatPage() {
               }
               currentStreamAssistantMessageId = null; // Reset for the next potential message in the same stream (if any)
               currentStreamAccumulatedContent = "";
-            } else if (parsedChunk.type === 'error') {
-              const errorMsg = parsedChunk.error_message || "未知的流错误";
+            } else if (parsedChunk.type === 'error' && parsedChunk.error) {
+              const errorMsg = `${parsedChunk.error.message}${parsedChunk.error.details ? ` (详情: ${parsedChunk.error.details})` : ''}`;
               if (currentStreamAssistantMessageId && freshActiveChatId) { // Check freshActiveChatId
                 freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, { error: errorMsg, isLoading: false });
               } else {

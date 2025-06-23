@@ -24,6 +24,9 @@ Thumbs.db
 *.seed
 *.pid.lock
 
+#图片
+*.png
+
 # ===== Node.js / Frontend =====
 
 # 依赖

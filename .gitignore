@@ -1,0 +1,253 @@
+# ===== 通用忽略规则 =====
+
+# 操作系统生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# ===== Node.js / Frontend =====
+
+# 依赖
+frontend/node_modules/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 构建输出
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+
+# Runtime data
+frontend/pids
+frontend/*.pid
+frontend/*.seed
+frontend/*.pid.lock
+
+# Coverage directory used by tools like istanbul
+frontend/coverage/
+frontend/.nyc_output
+
+# 环境变量文件（包含敏感信息）
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Vercel
+frontend/.vercel
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# ===== Python / Backend =====
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+treehole_mcp_server/__pycache__/
+treehole_mcp_server/*.py[cod]
+treehole_mcp_server/*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff (if applicable):
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff (if applicable):
+instance/
+.webassets-cache
+
+# Scrapy stuff (if applicable):
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# 虚拟环境
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ===== 项目特定的忽略规则 =====
+
+# 日志文件
+treehole_mcp_server/server.log
+treehole_mcp_server/*.log
+*.log
+
+# 配置文件（可能包含敏感信息）
+config.json
+config.local.json
+secrets.json
+
+# API密钥和认证文件
+.env*
+.secrets
+api_keys.txt
+credentials.json
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 备份文件
+*.bak
+*.backup
+
+# 缓存目录
+.cache/
+cache/
+
+# 测试输出
+test-results/
+test-output/
+
+# Docker相关
+.dockerignore
+docker-compose.override.yml
+
+# 打包文件
+*.tar.gz
+*.zip
+*.rar
+
+# 临时上传文件
+uploads/
+temp/
+
+# ===== 但需要保留的文件 =====
+# 使用 ! 来排除某些文件不被忽略
+
+# 保留示例配置文件
+!config.example.json
+!.env.example
+
+# 保留必要的配置文件
+!frontend/.env.local.example
+!treehole_mcp_server/.env.example

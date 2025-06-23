@@ -214,7 +214,8 @@ export default function ChatPage() {
         maxTokens: currentActiveSession.maxTokens,
         topP: currentActiveSession.topP,
         clientProvidedApiKey: settingsStore.getApiKey(selectedProvider.id) || undefined,
-        stop: currentActiveSession.stopSequences && currentActiveSession.stopSequences.length > 0 ? currentActiveSession.stopSequences : undefined, // Add stop sequences
+        stop: currentActiveSession.stopSequences && currentActiveSession.stopSequences.length > 0 ? currentActiveSession.stopSequences : undefined,
+        jsonSchema: currentActiveSession.jsonSchema,
       };
       
       console.log("Sending request to /api/chat/stream with body:", requestBody);

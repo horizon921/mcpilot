@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { toast } from "sonner";
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { ChatSession, Message } from '@/types/chat';
@@ -75,14 +76,16 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
       }
 
       let jsonSchema: Record<string, any> | undefined = undefined;
-      if (structuredOutput && jsonSchemaInput.trim()) {
-        try {
-          jsonSchema = JSON.parse(jsonSchemaInput);
-        } catch (e) {
-          alert("JSON Schema 格式错误，请输入合法的 JSON");
-          return;
-        }
-      }
+     if (structuredOutput && jsonSchemaInput.trim()) {
+       try {
+         jsonSchema = JSON.parse(jsonSchemaInput);
+       } catch (e: any) {
+         toast.error("JSON Schema 格式错误", {
+           description: `请输入合法的JSON。错误: ${e.message}`,
+         });
+         return;
+       }
+     }
 
       updateChatSessionSettings(activeChatSession.id, {
         modelId: selectedModelId,

@@ -213,10 +213,24 @@ export default function ChatPage() {
         systemPrompt: currentActiveSession.systemPrompt,
         maxTokens: currentActiveSession.maxTokens,
         topP: currentActiveSession.topP,
+        stream: currentActiveSession.stream ?? true, // 添加流式响应设置
         clientProvidedApiKey: settingsStore.getApiKey(selectedProvider.id) || undefined,
         stop: currentActiveSession.stopSequences && currentActiveSession.stopSequences.length > 0 ? currentActiveSession.stopSequences : undefined,
         jsonSchema: currentActiveSession.jsonSchema,
         enableInputPreprocessing: appSettings.enableInputPreprocessing,
+        // 添加启用的MCP服务器完整信息
+        enabledMcpServers: (() => {
+          // 获取启用且已连接的MCP服务器完整信息
+          const sessionEnabledIds = currentActiveSession.enabledMcpServers;
+          if (sessionEnabledIds && sessionEnabledIds.length > 0) {
+            return sessionEnabledIds
+              .map(id => settingsStore.getMCPServerById(id))
+              .filter(s => s && s.isEnabled && s.status === 'connected' && s.tools && s.tools.length > 0);
+          } else {
+            return settingsStore.getEnabledMCPServers()
+              .filter(s => s.status === 'connected' && s.tools && s.tools.length > 0);
+          }
+        })(),
       };
       
       console.log("Sending request to /api/chat/stream with body:", requestBody);
@@ -235,7 +249,19 @@ export default function ChatPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `API 请求失败，状态码: ${response.status}` }));
-        throw new Error(errorData.message || `API 错误: ${response.status}`);
+        const errorMessage = errorData.error || errorData.message || `API 错误: ${response.status}`;
+        
+        // 添加一个错误的AI助手消息，而不是覆盖用户消息
+        const errorAssistantMessage: Omit<MessageType, "id" | "createdAt" | "chatId"> = {
+          role: 'assistant',
+          content: `抱歉，处理您的请求时遇到错误：${errorMessage}`,
+          error: errorMessage,
+          isLoading: false,
+        };
+        
+        chatStore.addMessage(currentActiveChatId, errorAssistantMessage);
+        setChatLoading(false);
+        return;
       }
       if (!response.body) throw new Error('API 响应体为空');
 
@@ -282,6 +308,7 @@ export default function ChatPage() {
               currentStreamAccumulatedContent += parsedChunk.content;
               freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
                 content: currentStreamAccumulatedContent,
+                isLoading: false, // 开始接收内容时立即停止loading状态
               });
             } else if (parsedChunk.type === 'tool_calls' && parsedChunk.tool_calls && currentStreamAssistantMessageId) {
               // Update the current assistant message with the tool calls and any content received so far.
@@ -291,83 +318,76 @@ export default function ChatPage() {
                 isLoading: false, // This part of the assistant's turn is done; now tools will run.
               });
               
-              // IIFE to handle async tool call processing
-              (async () => {
-                const toolCallResultsPayload: Omit<MessageType, "id" | "createdAt" | "chatId">[] = [];
-                for (const toolCall of parsedChunk.tool_calls!) {
-                  let tcResultData: any;
-                  let targetServer: import('@/types/mcp').MCPServerInfo | undefined;
-                  
-                  const settingsStore = useSettingsStore.getState();
-                  const sessionMcpServerIds = currentActiveSession.enabledMcpServers;
-
-                  if (sessionMcpServerIds && sessionMcpServerIds.length > 0) {
-                    const sessionEnabledServers = sessionMcpServerIds
-                      .map(id => settingsStore.getMCPServerById(id))
-                      .filter(s => s && s.isEnabled && s.status === 'connected') as import('@/types/mcp').MCPServerInfo[];
-                    if (sessionEnabledServers.length > 0) {
-                      targetServer = sessionEnabledServers[0]; // Use first from session-specific list
-                      console.log(`Using session-specific MCP server: ${targetServer.name} for tool call.`);
-                    }
-                  }
-
-                  if (!targetServer) { // Fallback to global enabled servers
-                    const globalEnabledMCPServers = settingsStore.getEnabledMCPServers();
-                    if (globalEnabledMCPServers.length > 0) {
-                      targetServer = globalEnabledMCPServers.filter(s => s.status === 'connected')[0]; // Use first connected from global list
-                       if (targetServer) {
-                        console.log(`Using global MCP server: ${targetServer.name} for tool call (session-specific not found or not connected).`);
-                      }
-                    }
-                  }
-
-                  if (!targetServer) {
-                    tcResultData = { error: `错误：没有可用的或已连接的 MCP 服务来处理工具调用 "${toolCall.function.name}"。请检查会话或全局 MCP 设置。` };
-                  } else {
-                    try {
-                      const mcpResp = await fetch('/api/mcp/call', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          serverId: targetServer.id,
-                          serverBaseUrl: targetServer.baseUrl,
-                          toolName: toolCall.function.name,
-                          arguments: JSON.parse(toolCall.function.arguments), // Assuming arguments is a JSON string
-                          authConfig: targetServer.authConfig, // Pass authentication configuration
-                        }),
-                      });
-                      const mcpResJson = await mcpResp.json() as import('@/types/mcp').MCPCallApiResponse;
-                      tcResultData = mcpResJson.success ? mcpResJson.data : { error: mcpResJson.error || "MCP 工具调用失败" };
-                    } catch (e: any) { tcResultData = { error: e.message || "调用 MCP 代理出错" }; }
-                  }
-                  toolCallResultsPayload.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(tcResultData) });
+              // 工具调用现在由后端处理，前端只需要等待tool_call_start/result/error事件
+              console.log('收到工具调用:', parsedChunk.tool_calls);
+              
+            } else if (parsedChunk.type === 'tool_call_start') {
+              // 处理MCP工具调用开始事件
+              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
+                const toolCallStatus: import('@/types/chat').MCPToolCallStatus = {
+                  tool_call_id: parsedChunk.tool_call_id,
+                  tool_name: parsedChunk.tool_name || '未知工具',
+                  server_name: parsedChunk.server_name || '未知服务器',
+                  status: 'calling',
+                  timestamp: new Date(),
+                };
+                
+                // 更新消息，添加或更新MCP工具调用状态
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+                const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
+                const updatedMcpToolCalls = [...existingMcpToolCalls];
+                
+                const existingIndex = updatedMcpToolCalls.findIndex(tc => tc.tool_call_id === parsedChunk.tool_call_id);
+                if (existingIndex >= 0) {
+                  updatedMcpToolCalls[existingIndex] = toolCallStatus;
+                } else {
+                  updatedMcpToolCalls.push(toolCallStatus);
                 }
                 
-                // CRITICAL: Re-check active chat ID before adding tool results and resending.
-                const stillActiveChatIdForToolResults = useChatStore.getState().activeChatId;
-                if (stillActiveChatIdForToolResults === freshActiveChatId) { // Ensure chat hasn't changed
-                    // Add all tool result messages to the store.
-                    toolCallResultsPayload.forEach(tm => useChatStore.getState().addMessage(stillActiveChatIdForToolResults!, tm));
-                    
-                    // Get the latest history, which now includes the assistant's tool_calls message and the tool_result messages.
-                    const historyWithToolResults = useChatStore.getState().getActiveChatMessages();
-                    
-                    // Recursively call handleSendMessage to send the history (with tool results) back to the AI.
-                    // Pass null for content, as we are not adding a new user message here.
-                    await handleSendMessage("", undefined, historyWithToolResults);
-                } else {
-                     console.warn("Chat session changed before tool results could be processed and resent.");
-                     // If chat changed, we might not want to set global loading to false here,
-                     // as the new chat's loading state will be managed independently.
-                     // However, for the *current* (old) chat context, this flow is ending.
-                     setChatLoading(false); // Stop loading for this (now old) chat context
-                }
-              })();
-              // Since the IIFE is async and will initiate a new `handleSendMessage` call,
-              // we should exit the current stream processing loop. The server also typically closes
-              // the stream after sending tool_calls.
-              return; // Exit the `while (true)` loop and `handleSendMessage` for this stream.
-            
+                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                  mcpToolCalls: updatedMcpToolCalls
+                });
+              }
+            } else if (parsedChunk.type === 'tool_call_result') {
+              // 处理MCP工具调用结果事件
+              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+                const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
+                const updatedMcpToolCalls = existingMcpToolCalls.map(tc =>
+                  tc.tool_call_id === parsedChunk.tool_call_id
+                    ? {
+                        ...tc,
+                        status: 'success' as const,
+                        result: parsedChunk.result,
+                        timestamp: new Date()
+                      }
+                    : tc
+                );
+                
+                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                  mcpToolCalls: updatedMcpToolCalls
+                });
+              }
+            } else if (parsedChunk.type === 'tool_call_error') {
+              // 处理MCP工具调用错误事件
+              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+                const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
+                const updatedMcpToolCalls = existingMcpToolCalls.map(tc =>
+                  tc.tool_call_id === parsedChunk.tool_call_id
+                    ? {
+                        ...tc,
+                        status: 'error' as const,
+                        error: typeof parsedChunk.error === 'string' ? parsedChunk.error : parsedChunk.error?.message || '工具调用失败',
+                        timestamp: new Date()
+                      }
+                    : tc
+                );
+                
+                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                  mcpToolCalls: updatedMcpToolCalls
+                });
+              }
             } else if (parsedChunk.type === 'message_end' && currentStreamAssistantMessageId) {
               // Final update for the current assistant message.
               const finalMsgStore = freshChatStore.messages[freshActiveChatId];
@@ -405,10 +425,19 @@ export default function ChatPage() {
     } catch (error: any) {
       console.error("发送消息或处理流时出错:", error);
       const finalActiveChatIdOnError = useChatStore.getState().activeChatId; // Get latest active chat ID
-      if (tempMessageId && finalActiveChatIdOnError) { // If it was an optimistic message
-        useChatStore.getState().updateMessage(finalActiveChatIdOnError, tempMessageId, { error: error.message || "发送失败", isLoading: false });
+      
+      // 添加一个错误的AI助手消息
+      if (finalActiveChatIdOnError) {
+        const errorAssistantMessage: Omit<MessageType, "id" | "createdAt" | "chatId"> = {
+          role: 'assistant',
+          content: `抱歉，处理您的请求时遇到错误：${error.message || "发送失败"}`,
+          error: error.message || "发送失败",
+          isLoading: false,
+        };
+        
+        useChatStore.getState().addMessage(finalActiveChatIdOnError, errorAssistantMessage);
       }
-      setChatError(error.message || "获取 AI 响应失败");
+      
       setChatLoading(false); // Ensure loading is stopped on any error
     }
     // Removed finally block for setChatLoading(false) as it's handled in more specific places.

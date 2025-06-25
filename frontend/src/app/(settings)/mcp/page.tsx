@@ -37,17 +37,15 @@ export default function MCPServersPage() {
     }
     setProbingServers(prev => ({ ...prev, [server.id]: true }));
     try {
-      // Assuming MCP info endpoint is at /mcp/info or similar standard path
-      // For this example, let's assume it's just the baseUrl that might return info or tools directly
-      // A more robust solution would define a specific info endpoint.
-      // We'll try to fetch from baseUrl and expect a specific JSON structure.
-      const infoUrl = `${server.baseUrl.replace(/\/$/, '')}/mcp/info`; // Standardized info endpoint
+      // 通过我们的API路由来获取MCP服务器信息，避免CORS问题
+      const apiUrl = `/api/mcp/info?baseUrl=${encodeURIComponent(server.baseUrl)}`;
       
-      console.log(`Probing MCP server ${server.name} at ${infoUrl}`);
-      const response = await fetch(infoUrl, { cache: 'no-store' }); // Disable cache for probing
+      console.log(`Probing MCP server ${server.name} through API proxy`);
+      const response = await fetch(apiUrl, { cache: 'no-store' }); // Disable cache for probing
 
       if (!response.ok) {
-        throw new Error(`服务器响应错误: ${response.status} ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `服务器响应错误: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       
@@ -77,15 +75,25 @@ export default function MCPServersPage() {
 
   useEffect(() => {
     mcpServers.forEach(server => {
-      if (server.isEnabled && (server.status === 'disconnected' || !server.status)) { // Simplified condition
-        // Only probe if enabled and status is disconnected or not yet set (null/undefined)
-        // This prevents re-probing on every render if already in a stable error/connected state.
-        // To force re-probe, status should be reset to 'disconnected' by updateMCPServer action.
+      if (server.isEnabled && (server.status === 'disconnected' || !server.status)) {
         probeServer(server);
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mcpServers, probeServer]); // probeServer is memoized with useCallback
+  }, [mcpServers, probeServer]);
+
+  // 添加定期探测机制，每30秒检查一次已启用的服务器状态
+  useEffect(() => {
+    const interval = setInterval(() => {
+      mcpServers.forEach(server => {
+        if (server.isEnabled) {
+          console.log(`定期探测服务器: ${server.name}`);
+          probeServer(server);
+        }
+      });
+    }, 30000); // 30秒
+
+    return () => clearInterval(interval);
+  }, [mcpServers, probeServer]);
 
   const handleToggleEnabled = (serverId: string, currentIsEnabled: boolean | undefined) => {
     const newIsEnabled = !currentIsEnabled;

@@ -22,6 +22,16 @@ export interface ToolResult {
   content: string; // Result of the tool call, as a JSON string or plain text
 }
 
+export interface MCPToolCallStatus {
+  tool_call_id: string;
+  tool_name: string;
+  server_name: string;
+  status: 'calling' | 'success' | 'error';
+  result?: string;
+  error?: string;
+  timestamp: Date;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -35,6 +45,8 @@ export interface Message {
   // For UI state:
   isLoading?: boolean;
   error?: string;
+  // For MCP tool call status
+  mcpToolCalls?: MCPToolCallStatus[];
   // For future features like message branching/editing
   parentId?: string;
   childrenIds?: string[];

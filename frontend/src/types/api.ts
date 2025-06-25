@@ -43,7 +43,7 @@ export interface StreamError {
 // For streaming chat responses
 export interface ChatStreamChunk {
   id: string; // Message ID or chunk ID
-  type: "content_delta" | "tool_call_delta" | "tool_calls" | "tool_result" | "message_start" | "message_end" | "error" | "info";
+  type: "content_delta" | "tool_call_delta" | "tool_calls" | "tool_result" | "message_start" | "message_end" | "error" | "info" | "tool_call_start" | "tool_call_result" | "tool_call_error";
   // For content_delta
   role?: "assistant"; // Typically assistant for deltas
   content?: string; // The delta content
@@ -67,4 +67,8 @@ export interface ChatStreamChunk {
   error?: StreamError;
   // For info
   info_message?: string;
+  // For MCP tool call status
+  tool_name?: string; // Name of the MCP tool being called
+  server_name?: string; // Name of the MCP server
+  result?: string; // Tool call result (JSON string)
 }

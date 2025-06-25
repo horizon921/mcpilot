@@ -214,6 +214,48 @@ API Key：your-api-key
 API Key名称：X-API-Key
 ```
 
+**北大树洞MCP服务器**
+```
+名称：北大树洞爬虫
+基础URL：http://localhost:8765
+认证方式：北大树洞认证
+PKU Authorization：Bearer your_authorization_token
+PKU Cookie：your_cookie_string
+PKU UUID：your_uuid
+PKU XSRF Token：your_xsrf_token
+```
+
+#### 北大树洞认证信息获取步骤
+
+1. **启动北大树洞MCP服务器**
+   ```bash
+   cd mcp/pku-treehole-crawler
+   pip install -r requirements.txt
+   python server.py --port 8765
+   ```
+
+2. **获取认证信息**
+   - 打开浏览器，访问 https://treehole.pku.edu.cn
+   - 使用北大账号登录
+   - 按 F12 打开开发者工具，切换到"网络"选项卡
+   - 刷新页面或进行任意操作，找到发送到 `treehole.pku.edu.cn` 的请求
+   - 在请求头中找到以下信息：
+     - `Authorization`: 复制完整值（如：Bearer xxxxxx）
+     - `Cookie`: 复制完整的Cookie字符串
+     - `Uuid`: 复制UUID值
+     - `X-XSRF-TOKEN`: 复制XSRF token值
+
+3. **配置MCP服务器**
+   - 在前端应用中进入设置 -> MCP服务器
+   - 点击"添加新服务器"
+   - 选择"北大树洞认证"方式
+   - 填入从浏览器获取的认证信息
+
+4. **测试连接**
+   - 保存配置后，系统会自动检测服务器连接状态
+   - 绿色状态表示连接成功，可以看到可用的工具列表
+   - 如果连接失败，请检查认证信息是否正确或是否过期
+
 ## 📖 使用指南
 
 ### 基本聊天功能

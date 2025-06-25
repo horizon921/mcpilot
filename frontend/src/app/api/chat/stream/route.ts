@@ -7,6 +7,7 @@ import Ajv, { ValidationError } from "ajv";
 import type { Message as ChatMessage, MessageRole } from '@/types/chat';
 import type { ChatStreamChunk, StreamError } from '@/types/api';
 import type { AIProviderType } from '@/types/config'; // Import AIProviderType
+import type { MCPServerInfo, MCPToolDefinition, MCPCallApiRequest, MCPCallApiResponse } from '@/types/mcp';
 
 // Note: API keys are read from process.env.
 // For OpenAI: API_KEY_<NORMALIZED_PROVIDER_ID> or OPENAI_API_KEY
@@ -25,8 +26,11 @@ interface ChatApiRequest {
   maxTokens?: number;
   systemPrompt?: string;
   stop?: string[]; // Added for stop sequences
+  stream?: boolean; // Added for streaming control
   jsonSchema?: Record<string, any>;
   enableInputPreprocessing?: boolean;
+  // MCP integration
+  enabledMcpServers?: MCPServerInfo[]; // Complete MCP server info for enabled servers
 }
 
 const mapRoleToOpenAI = (role: MessageRole): OpenAI.Chat.ChatCompletionMessageParam['role'] => {
@@ -156,12 +160,189 @@ function detectMediumRiskPatterns(content: string): boolean {
 }
 
 
+// MCP工具调用相关辅助函数
+async function getMCPServersFromRequest(enabledMcpServers?: MCPServerInfo[]): Promise<MCPServerInfo[]> {
+  console.log('getMCPServersFromRequest 输入:', enabledMcpServers);
+  
+  if (!enabledMcpServers || enabledMcpServers.length === 0) {
+    console.log('没有传入MCP服务器或数组为空');
+    return [];
+  }
+  
+  // 过滤出已启用且已连接的服务器
+  const filtered = enabledMcpServers.filter(server => {
+    console.log(`检查服务器 ${server.name}: isEnabled=${server.isEnabled}, status=${server.status}, tools=${server.tools?.length || 0}`);
+    return server.isEnabled && server.status === 'connected';
+  });
+  
+  console.log('过滤后的MCP服务器数量:', filtered.length);
+  return filtered;
+}
+
+async function getMCPTools(mcpServers: MCPServerInfo[]): Promise<OpenAI.Chat.ChatCompletionTool[]> {
+  const tools: OpenAI.Chat.ChatCompletionTool[] = [];
+  
+  for (const server of mcpServers) {
+    if (server.tools && server.status === 'connected') {
+      for (const tool of server.tools) {
+        // 生成符合OpenAI规范的工具名称（只允许字母、数字、下划线、点和短横线）
+        const safeServerName = server.id.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const safeToolName = tool.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const toolName = `${safeServerName}_${safeToolName}`;
+        
+        // 验证工具名称符合OpenAI规范
+        if (!/^[a-zA-Z0-9_.-]+$/.test(toolName)) {
+          console.warn(`跳过不符合命名规范的工具: ${toolName}`);
+          continue;
+        }
+        
+        // 构建详细的工具描述，包含MCP服务器的完整参数信息
+        let enhancedDescription = `[来自${server.name}] ${tool.description}`;
+        
+        // 根据工具的input_schema自动生成详细的参数说明
+        if (tool.input_schema && tool.input_schema.properties) {
+          const properties = tool.input_schema.properties as Record<string, any>;
+          const requiredFields: string[] = Array.isArray(tool.input_schema.required) ? tool.input_schema.required : [];
+          
+          enhancedDescription += '\n\n**参数详情**：';
+          
+          Object.entries(properties).forEach(([paramName, paramSchema]) => {
+            const isRequired = requiredFields.includes(paramName);
+            const requiredText = isRequired ? ' [必需]' : ' [可选]';
+            const paramType = paramSchema.type || 'unknown';
+            const paramDesc = paramSchema.description || '无描述';
+            const defaultValue = paramSchema.default !== undefined ? ` (默认: ${paramSchema.default})` : '';
+            const enumValues = paramSchema.enum ? ` (可选值: ${paramSchema.enum.join(', ')})` : '';
+            const minMax = [];
+            if (paramSchema.minimum !== undefined) minMax.push(`最小: ${paramSchema.minimum}`);
+            if (paramSchema.maximum !== undefined) minMax.push(`最大: ${paramSchema.maximum}`);
+            const rangeText = minMax.length > 0 ? ` (${minMax.join(', ')})` : '';
+            
+            enhancedDescription += `\n- **${paramName}** (${paramType})${requiredText}: ${paramDesc}${defaultValue}${enumValues}${rangeText}`;
+          });
+        }
+        
+        // 为特定工具添加使用示例和重要说明
+        if (tool.name === 'get_posts' && server.name.includes('树洞')) {
+          enhancedDescription += `\n\n**重要使用说明**：
+- 当用户要求搜索特定关键词时，务必在keyword参数中传入该关键词
+- keyword参数用于搜索包含该关键词的帖子内容
+- 如果用户提到"搜索xxx"、"查找xxx"、"关于xxx的帖子"，请将xxx作为keyword参数
+- label参数说明：1-课程心得，2-失物招领，3-求职经历，4-跳蚤市场
+- time_start可用于获取指定时间点之后的帖子（Unix时间戳）
+- include_replies和include_images控制是否获取回复和图片内容`;
+        } else if (tool.name === 'get_followed_posts' && server.name.includes('树洞')) {
+          enhancedDescription += `\n\n**使用说明**：
+- 获取用户关注的帖子，可按分组筛选
+- bookmark_id不指定时获取所有关注的帖子
+- 需要有效的用户认证信息`;
+        } else if (tool.name === 'get_bookmark_groups' && server.name.includes('树洞')) {
+          enhancedDescription += `\n\n**使用说明**：
+- 获取用户设置的关注分组列表
+- 无需额外参数，但需要有效的用户认证信息`;
+        }
+        
+        tools.push({
+          type: 'function',
+          function: {
+            name: toolName,
+            description: enhancedDescription,
+            parameters: tool.input_schema as any || { type: 'object', properties: {} }
+          }
+        });
+      }
+    }
+  }
+  
+  return tools;
+}
+
+async function callMCPTool(
+  toolName: string,
+  toolArguments: string,
+  mcpServers: MCPServerInfo[]
+): Promise<string> {
+  console.log('callMCPTool 调用:', { toolName, mcpServers: mcpServers.map(s => ({ id: s.id, name: s.name })) });
+  
+  // 解析工具名称（格式：serverId_toolName）
+  const parts = toolName.split('_');
+  if (parts.length < 2) {
+    throw new Error(`Invalid tool name format: ${toolName}`);
+  }
+  
+  const serverId = parts[0];
+  const actualToolName = parts.slice(1).join('_'); // 处理工具名中可能包含下划线的情况
+  
+  console.log('解析工具名称:', { serverId, actualToolName, originalToolName: toolName });
+  
+  // 找到对应的MCP服务器（现在使用serverId而不是serverName）
+  const server = mcpServers.find(s => {
+    const match = s.id === serverId || s.id.replace(/[^a-zA-Z0-9_.-]/g, '_') === serverId;
+    console.log(`检查服务器匹配: ${s.id} vs ${serverId}, match: ${match}`);
+    return match;
+  });
+  
+  if (!server) {
+    console.error('找不到MCP服务器:', { serverId, availableServers: mcpServers.map(s => s.id) });
+    throw new Error(`MCP server not found: ${serverId}. Available servers: ${mcpServers.map(s => s.id).join(', ')}`);
+  }
+  
+  console.log('找到匹配的服务器:', { id: server.id, name: server.name, baseUrl: server.baseUrl });
+  
+  if (!server.baseUrl) {
+    throw new Error(`MCP server ${serverId} has no base URL configured`);
+  }
+  
+  // 验证工具是否存在于服务器中
+  const toolExists = server.tools?.some(t => t.name === actualToolName);
+  if (!toolExists) {
+    console.error('工具不存在:', { actualToolName, availableTools: server.tools?.map(t => t.name) });
+    throw new Error(`Tool '${actualToolName}' not found in server '${server.name}'. Available tools: ${server.tools?.map(t => t.name).join(', ') || 'none'}`);
+  }
+  
+  // 构造MCP调用请求
+  const mcpRequest: MCPCallApiRequest = {
+    serverId: server.id,
+    serverBaseUrl: server.baseUrl,
+    toolName: actualToolName,
+    arguments: JSON.parse(toolArguments),
+    serverConfig: server.config
+  };
+  
+  console.log('发送MCP请求:', mcpRequest);
+  
+  // 调用我们的MCP代理API
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/mcp/call`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(mcpRequest)
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    console.error('MCP API调用失败:', errorData);
+    throw new Error(`MCP tool call failed: ${errorData.error || response.statusText}`);
+  }
+  
+  const result: MCPCallApiResponse = await response.json();
+  console.log('MCP API响应:', result);
+  
+  if (!result.success) {
+    throw new Error(`MCP tool call failed: ${result.error}`);
+  }
+  
+  return JSON.stringify(result.data);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ChatApiRequest;
     let {
       chatId, messages, modelNativeId, providerId, providerType, clientProvidedApiKey, baseUrl,
-      temperature = 0.7, topP, maxTokens, systemPrompt, stop, jsonSchema, enableInputPreprocessing
+      temperature = 0.7, topP, maxTokens, systemPrompt, stop, stream = true, jsonSchema, enableInputPreprocessing,
+      enabledMcpServers
     } = body;
 
     if (!messages || messages.length === 0) {
@@ -209,6 +390,68 @@ export async function POST(request: NextRequest) {
       if (!apiKeyToUse && providerType !== 'custom') {
         const envVarNames = `API_KEY_${normalizedProviderId}` + (providerType === 'openai' ? ` or OPENAI_API_KEY` : providerType === 'siliconflow' ? ` or SILICONFLOW_API_KEY/OPENAI_API_KEY` : '');
         console.error(`API key for provider ${providerId} (type: ${providerType}) is not configured. Tried ${envVarNames} and no client-provided key was sufficient.`);
+        
+        // 如果是占位符API密钥，返回模拟响应用于测试
+        if (process.env.OPENAI_API_KEY === 'sk-test-key-placeholder') {
+          console.log(`使用测试模式，流式设置: ${stream}`);
+          
+          if (stream) {
+            // 流式响应模式 - 打字机效果
+            const mockStream = new ReadableStream({
+              async start(controller) {
+                const send = (chunk: any) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                
+                const assistantMsgId = `ai-${Date.now()}`;
+                send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
+                
+                const mockResponse = `这是一个测试响应，正在使用流式模式显示。请配置真实的API密钥以使用完整功能。每个字符都会逐个显示，模拟打字机效果。`;
+                
+                // 模拟打字机效果 - 增加延迟让效果更明显
+                for (let i = 0; i < mockResponse.length; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 80)); // 增加到80ms延迟
+                  send({id: assistantMsgId, type: 'content_delta', role: 'assistant', content: mockResponse[i]});
+                }
+                
+                send({id: assistantMsgId, type: 'message_end'});
+                controller.close();
+              }
+            });
+            
+            return new Response(mockStream, {
+              headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+              }
+            });
+          } else {
+            // 非流式响应模式 - 一次性显示
+            const mockStream = new ReadableStream({
+              start(controller) {
+                const send = (chunk: any) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                
+                const assistantMsgId = `ai-${Date.now()}`;
+                send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
+                
+                const mockResponse = `这是一个测试响应，正在使用非流式模式显示。请配置真实的API密钥以使用完整功能。整个回复会一次性显示，没有打字机效果。`;
+                
+                // 一次性发送完整内容
+                send({id: assistantMsgId, type: 'content_delta', role: 'assistant', content: mockResponse});
+                send({id: assistantMsgId, type: 'message_end'});
+                controller.close();
+              }
+            });
+            
+            return new Response(mockStream, {
+              headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+              }
+            });
+          }
+        }
+        
         return NextResponse.json({ error: `API key for provider ${providerId} (type: ${providerType}) is not configured.` }, { status: 500 });
       }
       
@@ -239,6 +482,12 @@ export async function POST(request: NextRequest) {
       if (effectiveBaseUrl) console.log(`Using ${providerType} provider ${providerId} with base URL: ${effectiveBaseUrl}${apiKeyToUse ? " (API Key Provided)" : " (No API Key)"}`);
       else console.log(`Using ${providerType} provider ${providerId} with default SDK base URL.`);
       
+      // 获取MCP服务器和工具 - 只在有启用的服务器时处理
+      const mcpServers = await getMCPServersFromRequest(enabledMcpServers);
+      const mcpTools = mcpServers.length > 0 ? await getMCPTools(mcpServers) : [];
+      
+      console.log(`MCP工具数量: ${mcpTools.length}, 来自${mcpServers.length}个服务器`);
+      
       const openAIMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
       if (systemPrompt) openAIMessages.push({ role: 'system', content: systemPrompt });
       messages.forEach(msg => {
@@ -257,98 +506,213 @@ export async function POST(request: NextRequest) {
         }
       });
       try {
-        const stream = await currentOpenAIClient.chat.completions.create({
+        const openaiStream = await currentOpenAIClient.chat.completions.create({
           model: modelNativeId,
           messages: openAIMessages,
-          stream: true,
+          stream: stream, // 使用用户设置的流式参数
           temperature,
           max_tokens: maxTokens,
           top_p: topP,
           stop: stop, // Added stop parameter
           response_format: jsonSchema ? { type: "json_object" } : undefined,
+          tools: mcpTools.length > 0 ? mcpTools : undefined, // 添加MCP工具
         });
-        const readableStream = new ReadableStream({
-          async start(controller) {
-            const send = (c: ChatStreamChunk) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(c)}\n\n`));
-            const assistantMsgId = `ai-${Date.now()}`;
-            send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
-            let accumulatedToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [];
-            let accumulatedContent = "";
+        if (stream) {
+          // 流式响应处理
+          const streamResponse = openaiStream as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+          const readableStream = new ReadableStream({
+            async start(controller) {
+              const send = (c: ChatStreamChunk) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(c)}\n\n`));
+              const assistantMsgId = `ai-${Date.now()}`;
+              send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
+              let accumulatedToolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[] = [];
+              let accumulatedContent = "";
 
-            for await (const chunk of stream) {
-              const choice = chunk.choices[0];
-              if (choice?.delta?.content) {
-                accumulatedContent += choice.delta.content;
-                send({ id: assistantMsgId, type: 'content_delta', role: 'assistant', content: choice.delta.content });
-              }
-              if (choice?.delta?.tool_calls) {
-                // Accumulate tool call deltas if they stream piece by piece (some models might)
-                // For OpenAI, tool_calls usually arrive as a complete block in one of the last chunks.
-                choice.delta.tool_calls.forEach(deltaToolCall => {
-                  if (deltaToolCall.index === undefined) return; // Should not happen with OpenAI spec
-
-                  if (!accumulatedToolCalls[deltaToolCall.index]) {
-                    accumulatedToolCalls[deltaToolCall.index] = { id: "", type: "function", function: { name: "", arguments: "" }};
-                  }
-                  const currentToolCall = accumulatedToolCalls[deltaToolCall.index];
-                  if (deltaToolCall.id) currentToolCall.id = deltaToolCall.id;
-                  if (deltaToolCall.function?.name) currentToolCall.function.name += deltaToolCall.function.name;
-                  if (deltaToolCall.function?.arguments) currentToolCall.function.arguments += deltaToolCall.function.arguments;
-                });
-              }
-              // Check if this chunk signals the end of the turn (e.g. for tool calls)
-              if (choice?.finish_reason === 'tool_calls') {
-                // Send accumulated tool calls if any
-                if (accumulatedToolCalls.length > 0) {
-                  send({
-                    id: assistantMsgId,
-                    type: 'tool_calls', // New chunk type
-                    tool_calls: accumulatedToolCalls.map(tc => ({
-                      id: tc.id!, // id should be present by now
-                      type: tc.type!, // type should be 'function'
-                      function: {
-                        name: tc.function!.name!,
-                        arguments: tc.function!.arguments!,
-                      }
-                    }))
-                  });
-                  accumulatedToolCalls = []; // Reset for safety
+              for await (const chunk of streamResponse) {
+                const choice = chunk.choices[0];
+                if (choice?.delta?.content) {
+                  accumulatedContent += choice.delta.content;
+                  send({ id: assistantMsgId, type: 'content_delta', role: 'assistant', content: choice.delta.content });
                 }
-              } else if (choice?.finish_reason === 'stop') {
-                if (jsonSchema) {
-                  try {
-                    const parsedContent = JSON.parse(accumulatedContent);
-                    const ajv = new Ajv();
-                    const validate = ajv.compile(jsonSchema);
-                    if (!validate(parsedContent)) {
-                      console.error("JSON Schema validation failed:", validate.errors);
-                      send({
-                        id: assistantMsgId,
-                        type: 'error',
-                        error: {
-                          message: "模型输出不符合自定义的JSON Schema。",
-                          details: ajv.errorsText(validate.errors),
-                        }
-                      });
+                if (choice?.delta?.tool_calls) {
+                  // Accumulate tool call deltas if they stream piece by piece (some models might)
+                  // For OpenAI, tool_calls usually arrive as a complete block in one of the last chunks.
+                  choice.delta.tool_calls.forEach((deltaToolCall: any) => {
+                    if (deltaToolCall.index === undefined) return; // Should not happen with OpenAI spec
+
+                    if (!accumulatedToolCalls[deltaToolCall.index]) {
+                      accumulatedToolCalls[deltaToolCall.index] = { id: "", type: "function", function: { name: "", arguments: "" }};
                     }
-                  } catch (e) {
-                     console.error("Failed to parse or validate structured output:", e);
-                      send({
-                        id: assistantMsgId,
-                        type: 'error',
-                        error: {
-                          message: "无法解析模型输出为JSON，或验证时发生错误。",
-                          details: e instanceof Error ? e.message : String(e),
+                    const currentToolCall = accumulatedToolCalls[deltaToolCall.index];
+                    if (deltaToolCall.id) currentToolCall.id = deltaToolCall.id;
+                    if (deltaToolCall.function?.name) currentToolCall.function.name += deltaToolCall.function.name;
+                    if (deltaToolCall.function?.arguments) currentToolCall.function.arguments += deltaToolCall.function.arguments;
+                  });
+                }
+                // Check if this chunk signals the end of the turn (e.g. for tool calls)
+                if (choice?.finish_reason === 'tool_calls') {
+                  // Send accumulated tool calls if any
+                  if (accumulatedToolCalls.length > 0) {
+                    send({
+                      id: assistantMsgId,
+                      type: 'tool_calls', // New chunk type
+                      tool_calls: accumulatedToolCalls.map(tc => ({
+                        id: tc.id!, // id should be present by now
+                        type: tc.type!, // type should be 'function'
+                        function: {
+                          name: tc.function!.name!,
+                          arguments: tc.function!.arguments!,
                         }
-                      });
+                      }))
+                    });
+                    
+                    // 收集工具调用结果，准备发送给AI获取最终响应
+                    const toolMessages = [];
+                    
+                    // 处理MCP工具调用
+                    for (const toolCall of accumulatedToolCalls) {
+                      try {
+                        // 发送工具调用开始状态
+                        const serverIdFromTool = toolCall.function!.name!.split('_')[0];
+                        const actualServer = mcpServers.find(s => s.id === serverIdFromTool || s.id.replace(/[^a-zA-Z0-9_.-]/g, '_') === serverIdFromTool);
+                        
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_start',
+                          tool_call_id: toolCall.id!,
+                          tool_name: toolCall.function!.name!,
+                          server_name: actualServer?.name || serverIdFromTool
+                        });
+                        
+                        // 调用MCP工具
+                        const toolResult = await callMCPTool(
+                          toolCall.function!.name!,
+                          toolCall.function!.arguments!,
+                          mcpServers
+                        );
+                        
+                        // 发送工具调用结果
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_result',
+                          tool_call_id: toolCall.id!,
+                          result: toolResult
+                        });
+                        
+                        // 添加到工具消息数组
+                        toolMessages.push({
+                          role: 'tool' as const,
+                          tool_call_id: toolCall.id!,
+                          content: toolResult
+                        });
+                        
+                      } catch (error: any) {
+                        console.error('MCP工具调用失败:', error);
+                        // 发送工具调用错误
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_error',
+                          tool_call_id: toolCall.id!,
+                          error: error.message || '工具调用失败'
+                        });
+                        
+                        // 添加错误消息到工具消息数组
+                        toolMessages.push({
+                          role: 'tool' as const,
+                          tool_call_id: toolCall.id!,
+                          content: JSON.stringify({ error: error.message || '工具调用失败' })
+                        });
+                      }
+                    }
+                    
+                    // 结束第一个消息（包含工具调用的AI消息）
+                    send({id: assistantMsgId, type: 'message_end'});
+                    
+                    console.log('工具调用完成，准备重新请求AI获取最终响应');
+                    
+                    // 构建包含工具结果的消息历史
+                    const messagesWithToolResults = [
+                      ...openAIMessages,
+                      {
+                        role: 'assistant' as const,
+                        content: accumulatedContent,
+                        tool_calls: accumulatedToolCalls
+                      },
+                      ...toolMessages
+                    ];
+                    
+                    // 开始新的AI响应消息
+                    const finalAssistantMsgId = `ai-final-${Date.now()}`;
+                    send({id: finalAssistantMsgId, type: 'message_start', message: {id: finalAssistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
+                    let finalAccumulatedContent = "";
+                    
+                    // 重新调用AI获取最终响应 - 流式模式
+                    console.log('准备发送给AI的消息历史:', JSON.stringify(messagesWithToolResults, null, 2));
+                    const finalStream = await currentOpenAIClient.chat.completions.create({
+                      model: modelNativeId,
+                      messages: messagesWithToolResults,
+                      stream: true,
+                      temperature,
+                      max_tokens: maxTokens,
+                      top_p: topP,
+                      stop: stop,
+                      response_format: jsonSchema ? { type: "json_object" } : undefined,
+                    });
+                    
+                    // 处理最终响应的流式输出
+                    for await (const finalChunk of finalStream) {
+                      const finalChoice = finalChunk.choices[0];
+                      if (finalChoice?.delta?.content) {
+                        finalAccumulatedContent += finalChoice.delta.content;
+                        send({ id: finalAssistantMsgId, type: 'content_delta', role: 'assistant', content: finalChoice.delta.content });
+                      }
+                      
+                      if (finalChoice?.finish_reason === 'stop') {
+                        console.log('AI最终响应完成');
+                        break;
+                      }
+                    }
+                    
+                    // 结束最终响应消息
+                    send({id: finalAssistantMsgId, type: 'message_end'});
+                    
+                    accumulatedToolCalls = []; // Reset for safety
+                  }
+                } else if (choice?.finish_reason === 'stop') {
+                  if (jsonSchema) {
+                    try {
+                      const parsedContent = JSON.parse(accumulatedContent);
+                      const ajv = new Ajv();
+                      const validate = ajv.compile(jsonSchema);
+                      if (!validate(parsedContent)) {
+                        console.error("JSON Schema validation failed:", validate.errors);
+                        send({
+                          id: assistantMsgId,
+                          type: 'error',
+                          error: {
+                            message: "模型输出不符合自定义的JSON Schema。",
+                            details: ajv.errorsText(validate.errors),
+                          }
+                        });
+                      }
+                    } catch (e) {
+                       console.error("Failed to parse or validate structured output:", e);
+                        send({
+                          id: assistantMsgId,
+                          type: 'error',
+                          error: {
+                            message: "无法解析模型输出为JSON，或验证时发生错误。",
+                            details: e instanceof Error ? e.message : String(e),
+                          }
+                        });
+                    }
                   }
                 }
               }
-            }
-            
-            // If loop finishes and there are pending tool calls (e.g. if finish_reason wasn't 'tool_calls' but tool_calls were present)
-            // This part might be redundant if OpenAI always sends finish_reason='tool_calls' when tool_calls are present.
-            if (accumulatedToolCalls.length > 0) {
+              
+              // If loop finishes and there are pending tool calls (e.g. if finish_reason wasn't 'tool_calls' but tool_calls were present)
+              // This part might be redundant if OpenAI always sends finish_reason='tool_calls' when tool_calls are present.
+              if (accumulatedToolCalls.length > 0) {
                  send({
                     id: assistantMsgId,
                     type: 'tool_calls',
@@ -356,13 +720,156 @@ export async function POST(request: NextRequest) {
                       id: tc.id!, type: tc.type!, function: { name: tc.function!.name!, arguments: tc.function!.arguments! }
                     }))
                   });
-            }
+              }
 
-            send({id: assistantMsgId, type: 'message_end'}); // Send message_end regardless of tool_calls for this simplified flow
-            controller.close();
-          }
-        });
-        return new Response(readableStream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }});
+              send({id: assistantMsgId, type: 'message_end'}); // Send message_end regardless of tool_calls for this simplified flow
+              controller.close();
+            }
+          });
+          return new Response(readableStream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }});
+        } else {
+          // 非流式响应处理 - 等待完整响应后一次性返回
+          const completion = openaiStream as OpenAI.Chat.Completions.ChatCompletion;
+          const assistantMsgId = `ai-${Date.now()}`;
+          
+          const responseStream = new ReadableStream({
+            start(controller) {
+              const send = (c: ChatStreamChunk) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(c)}\n\n`));
+              
+              // 发送开始消息
+              send({id: assistantMsgId, type: 'message_start', message: {id: assistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString()}});
+              
+              const choice = completion.choices[0];
+              if (choice?.message?.content) {
+                // 一次性发送完整内容
+                send({id: assistantMsgId, type: 'content_delta', role: 'assistant', content: choice.message.content});
+              }
+              
+              // 处理工具调用（如果有）
+              if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+                send({
+                  id: assistantMsgId,
+                  type: 'tool_calls',
+                  tool_calls: choice.message.tool_calls.map(tc => ({
+                    id: tc.id,
+                    type: tc.type,
+                    function: {
+                      name: tc.function.name,
+                      arguments: tc.function.arguments,
+                    }
+                  }))
+                });
+                
+                // 处理MCP工具调用 - 非流式模式
+                (async () => {
+                  try {
+                    // 为每个工具调用创建工具结果消息
+                    const toolMessages = [];
+                    
+                    for (const toolCall of choice.message.tool_calls!) {
+                      try {
+                        const serverIdFromTool = toolCall.function.name.split('_')[0];
+                        const actualServer = mcpServers.find(s => s.id === serverIdFromTool || s.id.replace(/[^a-zA-Z0-9_.-]/g, '_') === serverIdFromTool);
+                        
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_start',
+                          tool_call_id: toolCall.id,
+                          tool_name: toolCall.function.name,
+                          server_name: actualServer?.name || serverIdFromTool
+                        });
+                        
+                        const toolResult = await callMCPTool(
+                          toolCall.function.name,
+                          toolCall.function.arguments,
+                          mcpServers
+                        );
+                        
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_result',
+                          tool_call_id: toolCall.id,
+                          result: toolResult
+                        });
+                        
+                        // 添加到工具消息数组
+                        toolMessages.push({
+                          role: 'tool' as const,
+                          tool_call_id: toolCall.id,
+                          content: toolResult
+                        });
+                        
+                      } catch (error: any) {
+                        console.error('MCP工具调用失败:', error);
+                        send({
+                          id: `tool-${toolCall.id}`,
+                          type: 'tool_call_error',
+                          tool_call_id: toolCall.id,
+                          error: error.message || '工具调用失败'
+                        });
+                        
+                        // 添加错误消息到工具消息数组
+                        toolMessages.push({
+                          role: 'tool' as const,
+                          tool_call_id: toolCall.id,
+                          content: JSON.stringify({ error: error.message || '工具调用失败' })
+                        });
+                      }
+                    }
+                    
+                    // 如果有工具调用，需要再次调用模型获取最终响应
+                    if (toolMessages.length > 0) {
+                      console.log('工具调用完成，重新请求模型以获取最终响应');
+                      
+                      // 构建包含工具结果的消息历史
+                      const messagesWithToolResults = [
+                        ...openAIMessages,
+                        {
+                          role: 'assistant' as const,
+                          content: choice.message.content,
+                          tool_calls: choice.message.tool_calls
+                        },
+                        ...toolMessages
+                      ];
+                      
+                      // 再次调用模型
+                      const finalResponse = await currentOpenAIClient.chat.completions.create({
+                        model: modelNativeId,
+                        messages: messagesWithToolResults,
+                        stream: false,
+                        temperature,
+                        max_tokens: maxTokens,
+                        top_p: topP,
+                        stop: stop,
+                        response_format: jsonSchema ? { type: "json_object" } : undefined,
+                      });
+                      
+                      const finalChoice = finalResponse.choices[0];
+                      if (finalChoice?.message?.content) {
+                        // 发送最终响应内容
+                        send({id: assistantMsgId, type: 'content_delta', role: 'assistant', content: finalChoice.message.content});
+                      }
+                    }
+                    
+                    // 发送结束消息
+                    send({id: assistantMsgId, type: 'message_end'});
+                    controller.close();
+                  } catch (error: any) {
+                    console.error('非流式工具调用处理出错:', error);
+                    send({id: assistantMsgId, type: 'message_end'});
+                    controller.close();
+                  }
+                })();
+              } else {
+                // 没有工具调用，直接结束
+                send({id: assistantMsgId, type: 'message_end'});
+                controller.close();
+              }
+            }
+          });
+          
+          return new Response(responseStream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }});
+        }
       } catch (e: any) { console.error('OpenAI API Error:', e); return NextResponse.json({ error: 'Error with OpenAI: ' + e.message }, { status: 500 }); }
 
     // --- Anthropic Provider ---

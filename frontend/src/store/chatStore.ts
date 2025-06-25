@@ -171,7 +171,7 @@ export const useChatStore = create<ChatStoreState>()(
             role,
             content,
             createdAt: new Date(),
-            isLoading: role === "user", // User message itself isn't loading, but implies AI will load
+            isLoading: false, // 用户消息不应该显示为loading状态
             user: role === "user" ? user : undefined,
           };
           set(state => ({

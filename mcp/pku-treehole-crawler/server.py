@@ -539,6 +539,87 @@ async def root():
         }
     }
 
+@app.get("/mcp/info")
+async def mcp_info():
+    """MCP服务器信息端点，用于客户端识别"""
+    return {
+        "name": "北大树洞爬虫 MCP 服务器",
+        "version": "0.1.0",
+        "protocol": "mcp",
+        "server_type": "mcp_standard",
+        "tools": [
+            {
+                "name": "get_posts",
+                "description": "获取北大树洞帖子，支持关键词、标签、时间范围筛选"
+            },
+            {
+                "name": "get_bookmark_groups",
+                "description": "获取账号的关注分组列表"
+            },
+            {
+                "name": "get_followed_posts",
+                "description": "获取账号关注的帖子，支持按分组筛选"
+            }
+        ]
+    }
+
+@app.get("/mcp-config-schema")
+async def get_config_schema():
+    """返回服务器配置参数的schema，供客户端动态生成配置界面"""
+    return {
+        "server_name": "北大树洞爬虫",
+        "description": "需要从浏览器获取北大树洞的认证信息",
+        "parameters": [
+            {
+                "name": "authorization",
+                "label": "Authorization Token",
+                "type": "password",
+                "description": "从浏览器开发者工具中获取的Authorization Header值（通常以'Bearer '开头）",
+                "required": True,
+                "location": "header",
+                "header_name": "PKU-Authorization",
+                "placeholder": "Bearer your_token_here"
+            },
+            {
+                "name": "cookie",
+                "label": "Cookie",
+                "type": "password",
+                "description": "完整的Cookie字符串，包含所有必要的会话信息",
+                "required": True,
+                "location": "header",
+                "header_name": "PKU-Cookie",
+                "placeholder": "完整的Cookie字符串"
+            },
+            {
+                "name": "uuid",
+                "label": "用户UUID",
+                "type": "string",
+                "description": "用户的唯一标识符UUID",
+                "required": True,
+                "location": "header",
+                "header_name": "PKU-UUID",
+                "placeholder": "用户UUID"
+            },
+            {
+                "name": "xsrf_token",
+                "label": "XSRF Token",
+                "type": "password",
+                "description": "防CSRF攻击的安全令牌",
+                "required": True,
+                "location": "header",
+                "header_name": "PKU-XSRF-Token",
+                "placeholder": "XSRF Token"
+            }
+        ],
+        "instructions": [
+            "1. 登录北大树洞网站 (https://treehole.pku.edu.cn)",
+            "2. 按 F12 打开开发者工具，切换到'网络'选项卡",
+            "3. 刷新页面或进行任意操作，找到发送到 treehole.pku.edu.cn 的请求",
+            "4. 在请求头中复制对应的认证信息",
+            "5. 注意：认证信息具有时效性，过期后需要重新获取"
+        ]
+    }
+
 @app.get("/tools")
 async def list_tools():
     """列出可用的工具"""

@@ -9,7 +9,7 @@ import hljs from "highlight.js";
 import "highlight.js/styles/github-dark.css";
 import katex from 'katex'; // Import KaTeX
 import 'katex/dist/katex.min.css'; // Import KaTeX CSS
-import { Bot, User, Edit3, Copy, Trash2, RefreshCw, GitFork, Save, XCircle } from "lucide-react"; // Added Save, XCircle
+import { Bot, User, Edit3, Copy, Trash2, RefreshCw, GitFork, Save, XCircle, Settings, CheckCircle, AlertCircle } from "lucide-react"; // Added Save, XCircle, Settings, CheckCircle, AlertCircle
 import classNames from "classnames";
 import type { MarkedOptions } from 'marked';
 import { Textarea } from "@/components/Common/Textarea"; // For editing
@@ -197,6 +197,71 @@ const MessageItem: React.FC<MessageItemProps> = ({
     ALLOW_DATA_ATTR: false,
   };
 
+  const renderMCPToolCallStatus = () => {
+    if (!message.mcpToolCalls || message.mcpToolCalls.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-3 space-y-2 w-full">
+        <div className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center">
+          <Settings size={12} className="mr-1 flex-shrink-0" />
+          MCP工具调用
+        </div>
+        {message.mcpToolCalls.map((toolCall) => (
+          <div key={toolCall.tool_call_id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 w-full min-w-0">
+            <div className="flex items-center justify-between mb-2 min-w-0">
+              <div className="flex items-center space-x-2 min-w-0 flex-1">
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                  {toolCall.tool_name}
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  来自 {toolCall.server_name}
+                </span>
+              </div>
+              <div className="flex items-center flex-shrink-0 ml-2">
+                {toolCall.status === 'calling' && (
+                  <span className="flex items-center text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                    <RefreshCw size={12} className="mr-1 animate-spin flex-shrink-0" />
+                    调用中...
+                  </span>
+                )}
+                {toolCall.status === 'success' && (
+                  <span className="flex items-center text-xs text-green-600 dark:text-green-400 whitespace-nowrap">
+                    <CheckCircle size={12} className="mr-1 flex-shrink-0" />
+                    成功
+                  </span>
+                )}
+                {toolCall.status === 'error' && (
+                  <span className="flex items-center text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
+                    <AlertCircle size={12} className="mr-1 flex-shrink-0" />
+                    失败
+                  </span>
+                )}
+              </div>
+            </div>
+            {toolCall.result && (
+              <div className="mt-2 w-full min-w-0">
+                <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">结果:</div>
+                <div className="text-xs bg-white dark:bg-gray-900 rounded p-2 border border-gray-100 dark:border-gray-600 font-mono max-h-32 overflow-y-auto w-full break-all">
+                  {toolCall.result}
+                </div>
+              </div>
+            )}
+            {toolCall.error && (
+              <div className="mt-2 w-full min-w-0">
+                <div className="text-xs text-red-600 dark:text-red-400 mb-1">错误:</div>
+                <div className="text-xs bg-red-50 dark:bg-red-900/20 rounded p-2 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 w-full break-all">
+                  {toolCall.error}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderContent = () => {
     if (isEditing && role === 'user') {
       return (
@@ -229,7 +294,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       );
     }
-    if (isLoading) {
+    if (isLoading && !content) {
       return <span className="italic text-gray-500">AI正在思考...</span>;
     }
     if (error) {
@@ -406,6 +471,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
           )}
         >
           {renderContent()}
+          {renderMCPToolCallStatus()}
           <div className="text-xs mt-1.5 opacity-70 text-right">
             {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>

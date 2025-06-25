@@ -17,21 +17,29 @@ export interface MCPToolDefinition {
   // output_schema?: MCPParameterSchema; // Optional: JSON Schema for tool output
 }
 
-// Authentication configuration types
-export type MCPAuthType = "none" | "bearer" | "api_key_header" | "api_key_query" | "basic" | "custom_headers";
+// Dynamic parameter configuration types
+export interface MCPParameterDefinition {
+  name: string;               // 参数的内部名称
+  label: string;              // UI中显示的友好名称
+  type: "string" | "password" | "boolean" | "select" | "number";
+  description?: string;       // 参数的简短描述或提示
+  required: boolean;          // 是否为必需参数
+  location: "header" | "query" | "body_json"; // 参数应该放在哪里
+  header_name?: string;       // 如果location是header，实际的HTTP头部名称
+  query_name?: string;        // 如果location是query，URL参数名称
+  options?: string[];         // 如果type是select，可选值列表
+  placeholder?: string;       // 输入框的占位符文本
+}
 
-export interface MCPAuthConfig {
-  type: MCPAuthType;
-  // For bearer token auth
-  bearerToken?: string;
-  // For API key authentication
-  apiKey?: string;
-  apiKeyName?: string; // Header name or query parameter name
-  // For basic auth
-  username?: string;
-  password?: string;
-  // For custom headers
-  customHeaders?: Record<string, string>;
+export interface MCPConfigSchema {
+  server_name: string;
+  description?: string;
+  parameters: MCPParameterDefinition[];
+}
+
+export interface MCPServerConfig {
+  // 用户配置的参数值，以参数name为键
+  parameters: Record<string, any>;
 }
 
 export interface MCPServerInfo {
@@ -39,8 +47,9 @@ export interface MCPServerInfo {
   name: string; // User-friendly name for the server
   description?: string;
   baseUrl: string; // Base URL of the MCP server
-  // Authentication configuration
-  authConfig?: MCPAuthConfig;
+  // Dynamic server configuration
+  configSchema?: MCPConfigSchema; // Server's parameter schema
+  config?: MCPServerConfig; // User's configured parameter values
   // Status information
   status: "connected" | "disconnected" | "error" | "connecting";
   lastChecked?: Date;
@@ -67,9 +76,7 @@ export interface MCPToolCallResult {
 }
 
 // For forms or API payloads
-export interface MCPServerPayload extends Omit<MCPServerInfo, "id" | "status" | "tools" | "lastChecked" | "errorDetails"> {
-  authConfig?: MCPAuthConfig;
-}
+export interface MCPServerPayload extends Omit<MCPServerInfo, "id" | "status" | "tools" | "lastChecked" | "errorDetails"> {}
 
 // --- Types for MCP Tool Call Proxy API ---
 
@@ -78,7 +85,7 @@ export interface MCPCallApiRequest {
   serverBaseUrl: string; // Base URL of the target MCP server (sent by client)
   toolName: string;
   arguments: Record<string, any>;
-  authConfig?: MCPAuthConfig; // Authentication configuration for the MCP server
+  serverConfig?: MCPServerConfig; // Server configuration with dynamic parameters
 }
 
 export interface MCPCallApiResponse {

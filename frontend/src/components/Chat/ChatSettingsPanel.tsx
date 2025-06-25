@@ -42,6 +42,9 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
 
   useEffect(() => {
     if (activeChatSession) {
+      // 只在会话ID变化时更新，避免因为会话对象更新导致的重置
+      const sessionId = activeChatSession.id;
+      
       setSelectedModelId(activeChatSession.modelId);
       setTemperature(activeChatSession.temperature ?? 0.7);
       setMaxTokens(activeChatSession.maxTokens ?? undefined);
@@ -57,7 +60,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
       setStopSequencesInput(activeChatSession.stopSequences?.join(', ') || "");
       setSessionEnabledMcpServerIds(activeChatSession.enabledMcpServers || []);
     }
-  }, [activeChatSession]);
+  }, [activeChatSession?.id]); // 只依赖会话ID而不是整个会话对象
 
   const handleSaveSettings = () => {
     if (activeChatSession) {
@@ -71,7 +74,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         try {
           logitBias = JSON.parse(logitBiasInput);
         } catch (e) {
-          alert("logit_bias 格式错误，请输入合法的 JSON");
+          toast.error("logit_bias 格式错误，请输入合法的 JSON");
           return;
         }
       }
@@ -104,8 +107,9 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         stopSequences: stopSequencesArray.length > 0 ? stopSequencesArray : undefined,
         enabledMcpServers: sessionEnabledMcpServerIds.length > 0 ? sessionEnabledMcpServerIds : undefined,
       });
+      
+      toast.success("聊天设置已保存！");
     }
-    // Consider closing popover here: document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   };
   
   const currentModel = selectedModelId ? getModelById(selectedModelId) : null;

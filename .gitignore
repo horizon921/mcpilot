@@ -198,8 +198,8 @@ dmypy.json
 # ===== 项目特定的忽略规则 =====
 
 # 日志文件
-treehole_mcp_server/server.log
-treehole_mcp_server/*.log
+mcp/*/server.log
+mcp/*/*.log
 *.log
 
 # 配置文件（可能包含敏感信息）
@@ -212,6 +212,7 @@ secrets.json
 .secrets
 api_keys.txt
 credentials.json
+mcp/*/test*.py
 
 # 数据库文件
 *.db

@@ -26,6 +26,7 @@ interface ChatApiRequest {
   systemPrompt?: string;
   stop?: string[]; // Added for stop sequences
   jsonSchema?: Record<string, any>;
+  enableInputPreprocessing?: boolean;
 }
 
 const mapRoleToOpenAI = (role: MessageRole): OpenAI.Chat.ChatCompletionMessageParam['role'] => {
@@ -47,13 +48,120 @@ const mapRoleToGemini = (role: MessageRole): 'user' | 'model' => {
   return 'user';
 };
 
+// --- Input Preprocessing ---
+function preprocessInput(content: string): string {
+    // 1. Sensitive Word Filtering
+    const sensitiveWords = [
+        // 政治类
+        "法轮功", "天安门事件", "六四", "达赖喇嘛", "新疆集中营",
+        // 暴力类
+        "自杀", "爆炸", "暗杀", "恐怖袭击", "枪支",
+        // 色情类
+        "色情", "裸体", "成人内容", "AV", "嫖娼",
+    ];
+    let processedContent = content;
+    for (const word of sensitiveWords) {
+        const regex = new RegExp(word, "gi");
+        processedContent = processedContent.replace(regex, "*".repeat(word.length));
+    }
+
+    // 2. Advanced Command Injection Protection
+    // 检测真正的恶意指令注入模式，避免误封正常技术讨论
+    if (detectMaliciousCommandInjection(processedContent)) {
+        console.warn(`Malicious command injection detected and blocked: ${processedContent.substring(0, 100)}...`);
+        return " [检测到恶意指令注入，已被拦截] ";
+    }
+
+    return processedContent;
+}
+
+function detectMaliciousCommandInjection(content: string): boolean {
+    // 转换为小写以便检测
+    const lowerContent = content.toLowerCase();
+    
+    // 1. 检测讨论上下文的关键词，如果存在则很可能是正常讨论
+    const discussionKeywords = [
+        '如何', '怎么', '什么是', '请问', '能否', '可以', '解释', '说明',
+        '举例', '示例', '例子', '学习', '教程', '文档', '原理', '区别',
+        'how', 'what', 'why', 'explain', 'example', 'tutorial', 'learn'
+    ];
+    
+    const hasDiscussionContext = discussionKeywords.some(keyword =>
+        lowerContent.includes(keyword)
+    );
+    
+    // 如果是讨论上下文，降低检测敏感性
+    if (hasDiscussionContext) {
+        // 只检测最明显的恶意模式
+        return detectHighRiskPatterns(content);
+    }
+    
+    // 2. 检测中等风险的指令注入模式
+    return detectHighRiskPatterns(content) || detectMediumRiskPatterns(content);
+}
+
+function detectHighRiskPatterns(content: string): boolean {
+    // 高风险模式：明显的恶意指令注入
+    const highRiskPatterns = [
+        // 命令链接和重定向组合
+        /;\s*(rm|del|format|fdisk|mkfs|dd)\s+/i,
+        /&&\s*(rm|del|format|fdisk|mkfs|dd)\s+/i,
+        /\|\|\s*(rm|del|format|fdisk|mkfs|dd)\s+/i,
+        
+        // 危险的系统操作
+        /\b(rm\s+-rf|del\s+\/[sq]|format\s+c:|fdisk\s+\/mbr)\b/i,
+        
+        // 代码执行模式
+        /`[^`]*\b(rm|del|wget|curl|nc|netcat)\b[^`]*`/i,
+        /\$\([^)]*\b(rm|del|wget|curl|nc|netcat)\b[^)]*\)/i,
+        
+        // 网络相关的恶意操作
+        /(wget|curl)\s+[^\s]+\s*\|\s*(sh|bash|python|perl)/i,
+        
+        // 后门和反向shell
+        /\b(nc|netcat|ncat)\s+.*-[el]/i,
+        /\/bin\/(sh|bash)\s+-i/i,
+        
+        // 权限提升
+        /sudo\s+(rm|chmod|chown)\s+.*\/\*/i,
+        
+        // 进程操作
+        /kill(all)?\s+-9/i,
+    ];
+    
+    return highRiskPatterns.some(pattern => pattern.test(content));
+}
+
+function detectMediumRiskPatterns(content: string): boolean {
+    // 中等风险模式：可能的指令注入，但需要更多上下文判断
+    const mediumRiskPatterns = [
+        // 多个命令操作符连续出现
+        /[;&|`]{2,}/,
+        
+        // 命令替换在不寻常的上下文中
+        /\$\([^)]{20,}\)/,
+        /`[^`]{20,}`/,
+        
+        // 文件操作与特殊字符组合
+        /\b(cat|head|tail|less|more)\s+[^\s]*[;&|]/i,
+        
+        // 网络命令与管道
+        /(wget|curl|lynx)\s+[^\s]+\s*\|/i,
+        
+        // 编码或混淆的命令
+        /(echo|printf)\s+[A-Za-z0-9+/=]{20,}\s*\|\s*(base64|xxd)/i,
+    ];
+    
+    return mediumRiskPatterns.some(pattern => pattern.test(content));
+}
+
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ChatApiRequest;
-    const {
+    let {
       chatId, messages, modelNativeId, providerId, providerType, clientProvidedApiKey, baseUrl,
-      temperature = 0.7, topP, maxTokens, systemPrompt, stop, jsonSchema
+      temperature = 0.7, topP, maxTokens, systemPrompt, stop, jsonSchema, enableInputPreprocessing
     } = body;
 
     if (!messages || messages.length === 0) {
@@ -64,6 +172,16 @@ export async function POST(request: NextRequest) {
     }
     if (!modelNativeId) {
       return NextResponse.json({ error: 'Model Native ID is required' }, { status: 400 });
+    }
+
+    // Apply preprocessing if enabled
+    if (enableInputPreprocessing) {
+        messages = messages.map(msg => {
+            if (msg.role === 'user' && msg.content) {
+                return { ...msg, content: preprocessInput(msg.content) };
+            }
+            return msg;
+        });
     }
 
     const normalizedProviderId = providerId?.replace(/-/g, '_').toUpperCase() || ""; // Used for API key env var lookup

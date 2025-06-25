@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pku-treehole-crawler": {
+      "command": "python",
+      "args": ["/绝对路径/到/pku-treehole-crawler/server.py", "--port", "8765", "--host", "0.0.0.0"],
+      "env": {
+        "PKU_AUTHORIZATION": "Bearer your_authorization_token_here",
+        "PKU_COOKIE": "your_cookie_string_here",
+        "PKU_UUID": "your_uuid_here",
+        "PKU_XSRF_TOKEN": "your_xsrf_token_here"
+      }
+    }
+  }
+}

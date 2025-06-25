@@ -41,7 +41,7 @@ export default function ChatPage() {
     isLoading: isChatLoading,
   } = useChatStore();
 
-  const { defaultModelId } = useSettingsStore(state => state.appSettings);
+  const { appSettings } = useSettingsStore();
   const { getApiKey } = useSettingsStore();
   const {
     isChatDetailPanelOpen,
@@ -79,7 +79,7 @@ export default function ChatPage() {
             router.replace(`/chat/${sortedSessions[0].id}`, { scroll: false });
           } else {
             // No sessions at all, create a new one
-            const newSession = createChatSession(TEMP_USER_ID, "新对话 1", defaultModelId);
+            const newSession = createChatSession(TEMP_USER_ID, "新对话 1", appSettings.defaultModelId);
             router.replace(`/chat/${newSession.id}`, { scroll: false });
           }
         }
@@ -98,11 +98,11 @@ export default function ChatPage() {
         router.replace(`/chat/${sortedSessions[0].id}`, { scroll: false });
       } else {
         // No active chat and no sessions at all, create a new one.
-        const newSession = createChatSession(TEMP_USER_ID, "新对话 1", defaultModelId);
+        const newSession = createChatSession(TEMP_USER_ID, "新对话 1", appSettings.defaultModelId);
         router.replace(`/chat/${newSession.id}`, { scroll: false });
       }
     }
-  }, [hasMounted, chatIdFromParams, router, loadChatSession, createChatSession, defaultModelId]); // Dependencies carefully chosen
+  }, [hasMounted, chatIdFromParams, router, loadChatSession, createChatSession, appSettings.defaultModelId]); // Dependencies carefully chosen
 
   const messages = useMemo(() => {
     if (!hasMounted || !activeChatId) return []; // Return empty array if not mounted or no active chat
@@ -172,7 +172,7 @@ export default function ChatPage() {
     let currentStreamAccumulatedContent = "";
 
     try {
-      const modelEntryIdToUse = currentActiveSession.modelId || defaultModelId;
+      const modelEntryIdToUse = currentActiveSession.modelId || appSettings.defaultModelId;
       if (!modelEntryIdToUse) {
         toast.error("没有在当前会话中指定模型，也没有配置全局默认模型。请检查聊天设置或应用设置。");
         setChatLoading(false);
@@ -216,6 +216,7 @@ export default function ChatPage() {
         clientProvidedApiKey: settingsStore.getApiKey(selectedProvider.id) || undefined,
         stop: currentActiveSession.stopSequences && currentActiveSession.stopSequences.length > 0 ? currentActiveSession.stopSequences : undefined,
         jsonSchema: currentActiveSession.jsonSchema,
+        enableInputPreprocessing: appSettings.enableInputPreprocessing,
       };
       
       console.log("Sending request to /api/chat/stream with body:", requestBody);

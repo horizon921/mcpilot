@@ -34,6 +34,7 @@ export interface SettingsStoreState {
   // --- AppSettings Actions ---
   updateAppSettings: (settings: Partial<AppSettings>) => void;
   setTheme: (theme: AppSettings["theme"]) => void;
+  toggleInputPreprocessing: (enabled: boolean) => void;
 
   // --- API Key Actions (handle with care) ---
   setApiKey: (providerId: string, apiKey: string) => void;
@@ -66,6 +67,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         appSettings: {
           theme: "system", // Default theme
           defaultModelId: "gpt-4-default",
+          enableInputPreprocessing: true, // Default to true
         },
         apiKeys: {},
 
@@ -143,6 +145,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
             console.log('[SettingsStore] New appSettings after setTheme:', newAppSettings);
             return { appSettings: newAppSettings };
           });
+        },
+        toggleInputPreprocessing: (enabled) => {
+          set((state) => ({
+            appSettings: { ...state.appSettings, enableInputPreprocessing: enabled },
+          }));
         },
 
         // --- API Key Implementations ---

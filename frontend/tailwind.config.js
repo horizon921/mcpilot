@@ -35,6 +35,10 @@ module.exports = {
           light: "#e5e7eb", // gray-200
           dark: "#374151", // gray-700
         },
+        input: {
+          light: "#e5e7eb", // gray-200
+          dark: "#374151", // gray-700
+        }
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",

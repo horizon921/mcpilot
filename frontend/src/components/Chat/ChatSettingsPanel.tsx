@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/Common/Pop
 import { Settings2,SlidersHorizontal, Server } from 'lucide-react'; // Added Server icon
 import { Textarea } from '../Common/Textarea'; // For system prompt
 import { Checkbox } from '@/components/Common/Checkbox'; // Added Checkbox
+import { Switch } from '@/components/Common/Switch';
 
 interface ChatSettingsPanelProps {
   activeChatSession: ChatSession | null | undefined;
@@ -21,7 +22,7 @@ interface ChatSettingsPanelProps {
 }
 
 const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession }) => {
-  const { providers, models, getModelById, getProviderById, mcpServers } = useSettingsStore(); // Added mcpServers
+  const { providers, models, getModelById, getProviderById, mcpServers, appSettings, toggleInputPreprocessing } = useSettingsStore();
   const { updateChatSessionSettings } = useChatStore();
 
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(activeChatSession?.modelId);
@@ -119,6 +120,22 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         <p className="text-xs text-muted-foreground">
           为当前对话调整模型和参数。
         </p>
+      </div>
+
+      <div className="space-y-2 border-b border-gray-200 dark:border-gray-700 pb-4">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="input-preprocessing-switch" className="text-sm font-medium">
+            输入预处理
+            <p className="text-xs text-muted-foreground font-normal">
+              启用敏感词过滤和指令注入防护。
+            </p>
+          </Label>
+          <Switch
+            id="input-preprocessing-switch"
+            checked={appSettings.enableInputPreprocessing}
+            onCheckedChange={toggleInputPreprocessing}
+          />
+        </div>
       </div>
       
       <div className="space-y-2">

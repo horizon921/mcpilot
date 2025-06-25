@@ -50,6 +50,7 @@ export interface AppSettings {
   defaultTopP?: number;
   defaultMaxTokens?: number;
   theme: "light" | "dark" | "system";
+  enableInputPreprocessing?: boolean;
   // Other global app settings
 }
 

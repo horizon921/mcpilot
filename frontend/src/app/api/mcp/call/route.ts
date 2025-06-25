@@ -1,48 +1,86 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import type { MCPCallApiRequest, MCPCallApiResponse } from '@/types/mcp';
+import type { MCPCallApiRequest, MCPCallApiResponse, MCPAuthConfig } from '@/types/mcp';
 
-// This is a simplified proxy. In a real-world scenario, you'd add:
-// - Robust error handling and logging.
-// - Authentication/Authorization for accessing this proxy and for the MCP server itself.
-// - Timeout handling for requests to MCP servers.
-// - Potentially, a way to discover tool schemas from MCP servers if not hardcoded or sent by AI.
+// Build authentication headers based on auth configuration
+function buildAuthHeaders(authConfig?: MCPAuthConfig): Record<string, string> {
+  const headers: Record<string, string> = {};
+  
+  if (!authConfig || authConfig.type === 'none') {
+    return headers;
+  }
+  
+  switch (authConfig.type) {
+    case 'bearer':
+      if (authConfig.bearerToken) {
+        headers['Authorization'] = `Bearer ${authConfig.bearerToken}`;
+      }
+      break;
+      
+    case 'api_key_header':
+      if (authConfig.apiKey && authConfig.apiKeyName) {
+        headers[authConfig.apiKeyName] = authConfig.apiKey;
+      }
+      break;
+      
+    case 'basic':
+      if (authConfig.username && authConfig.password) {
+        const credentials = btoa(`${authConfig.username}:${authConfig.password}`);
+        headers['Authorization'] = `Basic ${credentials}`;
+      }
+      break;
+      
+    case 'custom_headers':
+      if (authConfig.customHeaders) {
+        Object.assign(headers, authConfig.customHeaders);
+      }
+      break;
+      
+    // api_key_query is handled in URL parameters, not headers
+    case 'api_key_query':
+      // This will be handled in the URL construction
+      break;
+  }
+  
+  return headers;
+}
+
+// Build URL with query parameters for API key query auth
+function buildUrlWithAuth(baseUrl: string, toolName: string, authConfig?: MCPAuthConfig): string {
+  const targetUrl = `${baseUrl.replace(/\/$/, '')}/tools/${encodeURIComponent(toolName)}/invoke`;
+  
+  if (authConfig?.type === 'api_key_query' && authConfig.apiKey && authConfig.apiKeyName) {
+    const url = new URL(targetUrl);
+    url.searchParams.set(authConfig.apiKeyName, authConfig.apiKey);
+    return url.toString();
+  }
+  
+  return targetUrl;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as MCPCallApiRequest;
-    const { serverBaseUrl, toolName, arguments: toolArgs } = body;
+    const { serverBaseUrl, toolName, arguments: toolArgs, authConfig } = body;
 
     if (!serverBaseUrl || !toolName) {
       return NextResponse.json({ success: false, error: 'Missing serverBaseUrl or toolName' } as MCPCallApiResponse, { status: 400 });
     }
 
-    // Construct the target URL on the MCP server.
-    // The exact path structure (`/tools/{toolName}/call`) is an assumption.
-    // This needs to match the MCP server's API design.
-    // Or, the MCP server might have a single endpoint that takes toolName as a parameter.
-    // For now, let's assume a common RESTful pattern or a generic /call endpoint.
-    // A more flexible approach might involve the MCP server advertising its endpoint structure.
-    
-    // Option 1: Assume a generic /call endpoint on the MCP server that takes tool_name and args
-    // const targetUrl = `${serverBaseUrl.replace(/\/$/, '')}/call`; 
-    // const mcpRequestBody = { tool_name: toolName, arguments: toolArgs };
+    // Build target URL with potential query auth
+    const targetUrl = buildUrlWithAuth(serverBaseUrl, toolName, authConfig);
+    const mcpRequestBody = toolArgs; // Send arguments directly as the body
 
-    // Option 2: Assume a RESTful path per tool (more common for distinct tools)
-    // This is just an example, the actual MCP server will define its API.
-    // We might need a more sophisticated way to determine the endpoint if it varies greatly.
-    const targetUrl = `${serverBaseUrl.replace(/\/$/, '')}/tools/${encodeURIComponent(toolName)}/invoke`; 
-    const mcpRequestBody = toolArgs; // Send arguments directly as the body for this pattern
+    // Build authentication headers
+    const authHeaders = buildAuthHeaders(authConfig);
 
-
-    console.log(`Proxying MCP call to: ${targetUrl} with args:`, mcpRequestBody);
+    console.log(`Proxying MCP call to: ${targetUrl} with auth type: ${authConfig?.type || 'none'}`);
 
     const mcpResponse = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // TODO: Add any necessary authentication headers for the MCP server
-        // e.g., 'Authorization': `Bearer ${process.env.MCP_SERVER_AUTH_TOKEN_FOR_SERVER_ID_...}`
+        ...authHeaders,
       },
       body: JSON.stringify(mcpRequestBody),
     });

@@ -17,11 +17,30 @@ export interface MCPToolDefinition {
   // output_schema?: MCPParameterSchema; // Optional: JSON Schema for tool output
 }
 
+// Authentication configuration types
+export type MCPAuthType = "none" | "bearer" | "api_key_header" | "api_key_query" | "basic" | "custom_headers";
+
+export interface MCPAuthConfig {
+  type: MCPAuthType;
+  // For bearer token auth
+  bearerToken?: string;
+  // For API key authentication
+  apiKey?: string;
+  apiKeyName?: string; // Header name or query parameter name
+  // For basic auth
+  username?: string;
+  password?: string;
+  // For custom headers
+  customHeaders?: Record<string, string>;
+}
+
 export interface MCPServerInfo {
   id: string; // Unique identifier for the server instance
   name: string; // User-friendly name for the server
   description?: string;
   baseUrl: string; // Base URL of the MCP server
+  // Authentication configuration
+  authConfig?: MCPAuthConfig;
   // Status information
   status: "connected" | "disconnected" | "error" | "connecting";
   lastChecked?: Date;
@@ -48,7 +67,9 @@ export interface MCPToolCallResult {
 }
 
 // For forms or API payloads
-export interface MCPServerPayload extends Omit<MCPServerInfo, "id" | "status" | "tools" | "lastChecked" | "errorDetails"> {}
+export interface MCPServerPayload extends Omit<MCPServerInfo, "id" | "status" | "tools" | "lastChecked" | "errorDetails"> {
+  authConfig?: MCPAuthConfig;
+}
 
 // --- Types for MCP Tool Call Proxy API ---
 
@@ -57,7 +78,7 @@ export interface MCPCallApiRequest {
   serverBaseUrl: string; // Base URL of the target MCP server (sent by client)
   toolName: string;
   arguments: Record<string, any>;
-  // Future: May include authentication details or user context
+  authConfig?: MCPAuthConfig; // Authentication configuration for the MCP server
 }
 
 export interface MCPCallApiResponse {

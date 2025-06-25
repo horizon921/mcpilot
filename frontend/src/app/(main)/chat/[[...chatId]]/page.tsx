@@ -329,9 +329,11 @@ export default function ChatPage() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                          serverId: targetServer.id,
                           serverBaseUrl: targetServer.baseUrl,
                           toolName: toolCall.function.name,
                           arguments: JSON.parse(toolCall.function.arguments), // Assuming arguments is a JSON string
+                          authConfig: targetServer.authConfig, // Pass authentication configuration
                         }),
                       });
                       const mcpResJson = await mcpResp.json() as import('@/types/mcp').MCPCallApiResponse;

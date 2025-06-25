@@ -152,13 +152,67 @@ MCP服务器将运行在：http://localhost:8001
 
 ### 4. 配置MCP服务器
 
-#### 添加北大树洞MCP服务器
+#### 添加MCP服务器
 1. 进入设置 -> MCP服务器页面
 2. 点击"添加新服务器"
-3. 填写信息：
-   - **名称**：北大树洞
-   - **基础URL**：http://localhost:8001
-   - **描述**：北大树洞内容爬取服务
+3. 填写基本信息：
+   - **名称**：服务器名称（如：北大树洞、OpenAI API等）
+   - **基础URL**：MCP服务器的API地址
+   - **描述**：可选的服务器描述
+   - **默认启用**：是否在添加后默认启用该服务器
+
+#### 配置认证信息
+根据MCP服务器的要求，选择相应的认证方式：
+
+**无认证**
+- 适用于不需要认证的本地或测试服务器
+
+**Bearer Token认证**
+- 输入Bearer Token
+- 适用于使用Authorization: Bearer <token>的API
+
+**API Key认证**
+- **API Key (Header)**：API Key通过HTTP请求头传递
+  - API Key：输入你的API密钥
+  - API Key名称：请求头名称（如：X-API-Key、Authorization等）
+- **API Key (Query)**：API Key通过URL查询参数传递
+  - API Key：输入你的API密钥
+  - API Key名称：查询参数名称（如：api_key、key等）
+
+**基础认证**
+- 输入用户名和密码
+- 适用于HTTP Basic Authentication
+
+**自定义请求头**
+- 输入JSON格式的自定义请求头对象
+- 示例：`{"Authorization": "Bearer your-token", "X-Custom-Header": "value"}`
+- 适用于需要特殊请求头配置的服务器
+
+#### 示例配置
+
+**本地MCP服务器（无认证）**
+```
+名称：北大树洞
+基础URL：http://localhost:8001
+认证方式：无认证
+```
+
+**OpenAI兼容的MCP服务器**
+```
+名称：OpenAI API Server
+基础URL：https://api.openai.com/v1
+认证方式：Bearer Token
+Bearer Token：your-openai-api-key
+```
+
+**使用API Key的第三方服务**
+```
+名称：第三方API服务
+基础URL：https://api.example.com
+认证方式：API Key (Header)
+API Key：your-api-key
+API Key名称：X-API-Key
+```
 
 ## 📖 使用指南
 
@@ -285,6 +339,24 @@ EXPOSE 8001
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
+### 常见问题
+
+**Q: 如何为需要API密钥的MCP服务器配置认证？**
+A: 在设置 -> MCP服务器页面，添加或编辑服务器时，选择相应的认证方式并填入必要的认证信息。支持Bearer Token、API Key、基础认证等多种方式。
+
+**Q: 认证信息存储在哪里？**
+A: 认证信息存储在浏览器的本地存储中。出于安全考虑，建议定期更新API密钥，避免在公共设备上使用。
+
+**Q: 如何测试MCP服务器连接？**
+A: 添加MCP服务器后，系统会自动尝试连接并显示状态。绿色表示连接成功，红色表示连接失败。可以查看错误详情进行故障排除。
+
+**Q: 支持哪些类型的MCP服务器？**
+A: 支持所有符合MCP (Model Context Protocol) 标准的服务器，包括但不限于：
+- 本地运行的MCP服务器
+- 需要API密钥认证的云端服务
+- 企业内部的MCP服务
+- 第三方MCP服务提供商
+
 ## 🚀 进一步开发方向
 
 ### 短期目标
@@ -297,11 +369,13 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
    - 支持文件上传和处理
    - 添加聊天记录导出功能
    - 实现插件系统
+   - 扩展更多MCP认证方式（OAuth2、JWT等）
 
 3. **用户体验优化**
    - 添加快捷键支持
    - 优化移动端适配
    - 实现离线模式
+   - MCP服务器连接状态实时监控
 
 ### 中期目标
 1. **多模态支持**

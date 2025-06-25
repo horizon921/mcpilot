@@ -212,7 +212,9 @@ secrets.json
 .secrets
 api_keys.txt
 credentials.json
-mcp/*/test*.py
+mcp/*/test_server.py
+mcp/*/test_mcp.py
+mcp/*/test_http_server.py
 
 # 数据库文件
 *.db

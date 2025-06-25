@@ -10,6 +10,7 @@ import { Button } from '@/components/Common/Button';
 import { Label } from '@/components/Common/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Common/Select';
 import { Input } from '@/components/Common/Input'; // For number inputs like temperature
+import { Slider } from '@/components/Common/Slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/Common/Popover'; // To be created
 import { Settings2,SlidersHorizontal, Server } from 'lucide-react'; // Added Server icon
 import { Textarea } from '../Common/Textarea'; // For system prompt
@@ -18,10 +19,10 @@ import { Switch } from '@/components/Common/Switch';
 
 interface ChatSettingsPanelProps {
   activeChatSession: ChatSession | null | undefined;
-  // We'll use Zustand actions directly, so no need for callbacks for now
+  onClosePanel?: () => void; // 新增：保存后自动关闭面板
 }
 
-const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession }) => {
+const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession, onClosePanel }) => {
   const { providers, models, getModelById, getProviderById, mcpServers, appSettings, toggleInputPreprocessing } = useSettingsStore();
   const { updateChatSessionSettings } = useChatStore();
 
@@ -109,6 +110,9 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
       });
       
       toast.success("聊天设置已保存！");
+      if (onClosePanel) {
+        setTimeout(() => onClosePanel(), 300); // 延迟关闭，便于用户看到保存提示
+      }
     }
   };
   
@@ -142,36 +146,37 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
         </div>
       </div>
       
-      <div className="space-y-2">
-        <Label htmlFor="model-select">AI 模型</Label>
-        <Select value={selectedModelId} onValueChange={setSelectedModelId} name="model-select">
-          <SelectTrigger className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-sm focus:ring-2 focus:ring-primary">
-            <SelectValue placeholder="选择一个模型">
-              {selectedModelId && currentModel && currentProvider ?
-                <span className="text-xs">{currentProvider.name} / {currentModel.name} <span className="text-gray-400">({currentProvider.type})</span></span> :
-                "选择一个模型"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700">
-            {providers.map(provider => (
-              <React.Fragment key={provider.id}>
-                <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.name} <span className="text-gray-400">({provider.type})</span></Label>
-                {models.filter(m => m.providerId === provider.id).map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </React.Fragment>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="model-select">AI 模型</Label>
+          <Select value={selectedModelId} onValueChange={setSelectedModelId} name="model-select">
+            <SelectTrigger className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 shadow-sm focus:ring-2 focus:ring-primary">
+              <SelectValue placeholder="选择一个模型">
+                {selectedModelId && currentModel && currentProvider ?
+                  <span className="text-xs">{currentProvider.name} / {currentModel.name} <span className="text-gray-400">({currentProvider.type})</span></span> :
+                  "选择一个模型"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700">
+              {providers.map(provider => (
+                <React.Fragment key={provider.id}>
+                  <Label className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{provider.name} <span className="text-gray-400">({provider.type})</span></Label>
+                  {models.filter(m => m.providerId === provider.id).map(model => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </React.Fragment>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="system-prompt">系统提示 (System Prompt)</Label>
-          <Textarea 
-            id="system-prompt" 
-            value={systemPrompt} 
+          <Textarea
+            id="system-prompt"
+            value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             placeholder="例如：你是一个乐于助人的助手。"
             rows={3}
@@ -179,45 +184,102 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="temperature">Temperature</Label>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="temperature"
-                type="number"
-                value={temperature ?? ""}
-                onChange={(e) => setTemperature(e.target.value ? parseFloat(e.target.value) : undefined)}
-                step="0.01"
-                min="0"
-                max="2"
-                placeholder="0.7"
-                className="text-xs"
-                style={{ width: "80px" }}
-              />
-              <span className="text-xs text-gray-500">{temperature ?? ""}</span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="max-tokens">Max Tokens</Label>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="max-tokens"
-                type="number"
-                value={maxTokens ?? ""}
-                onChange={(e) => setMaxTokens(e.target.value ? parseInt(e.target.value) : undefined)}
-                step="1"
-                min="1"
-                placeholder="可选"
-                className="text-xs"
-                style={{ width: "80px" }}
-              />
-              <span className="text-xs text-gray-500">{maxTokens ?? ""}</span>
-            </div>
-          </div>
+        <Slider
+          label="Temperature"
+          min={0}
+          max={2}
+          step={0.01}
+          value={temperature === undefined ? 0.7 : temperature}
+          defaultValue={0.7}
+          onValueChange={v => setTemperature(v)}
+          showValue
+          className="mt-2"
+        />
+        <Slider
+          label="Max Tokens"
+          min={1}
+          max={4096}
+          step={1}
+          value={maxTokens === undefined ? 2048 : maxTokens}
+          defaultValue={2048}
+          onValueChange={v => setMaxTokens(Math.round(v))}
+          showValue
+          className="mt-2"
+        />
+        <Slider
+          label="Top P"
+          min={0}
+          max={1}
+          step={0.01}
+          value={topP === undefined ? 1 : topP}
+          defaultValue={1}
+          onValueChange={v => setTopP(v)}
+          showValue
+          className="mt-2"
+        />
+        <Slider
+          label="Presence Penalty"
+          min={-2}
+          max={2}
+          step={0.01}
+          value={presencePenalty === undefined ? 0 : presencePenalty}
+          defaultValue={0}
+          onValueChange={v => setPresencePenalty(v)}
+          showValue
+          className="mt-2"
+        />
+        <Slider
+          label="Frequency Penalty"
+          min={-2}
+          max={2}
+          step={0.01}
+          value={frequencyPenalty === undefined ? 0 : frequencyPenalty}
+          defaultValue={0}
+          onValueChange={v => setFrequencyPenalty(v)}
+          showValue
+          className="mt-2"
+        />
+        <div className="flex flex-row items-center gap-2 mt-2">
+          <Checkbox
+            id="structured-output"
+            checked={structuredOutput}
+            onCheckedChange={v => setStructuredOutput(v === true)}
+          />
+          <Label htmlFor="structured-output" className="ml-2 text-xs">结构化输出 (Structured Output)</Label>
         </div>
-        
-        <div className="space-y-2">
+        {structuredOutput && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="json-schema">自定义 JSON Schema</Label>
+            <Textarea
+              id="json-schema"
+              value={jsonSchemaInput}
+              onChange={e => setJsonSchemaInput(e.target.value)}
+              placeholder='输入一个OpenAPI schema对象来约束模型输出。有关示例，请参阅API文档。'
+              rows={4}
+              className="text-xs font-mono"
+            />
+          </div>
+        )}
+        <div className="flex flex-row items-center gap-2 mt-2">
+          <Checkbox
+            id="stream"
+            checked={stream}
+            onCheckedChange={v => setStream(v === true)}
+          />
+          <Label htmlFor="stream" className="ml-2 text-xs">流式响应 (Stream)</Label>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="user">User (API参数)</Label>
+          <Input
+            id="user"
+            type="text"
+            value={user ?? ""}
+            onChange={e => setUser(e.target.value)}
+            placeholder="可选"
+            className="text-xs"
+          />
+        </div>
+        <div className="flex flex-col gap-2">
           <Label htmlFor="stop-sequences">停止序列 (Stop Sequences)</Label>
           <Textarea
             id="stop-sequences"
@@ -227,12 +289,11 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
             rows={3}
             className="text-xs"
           />
-           <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             模型在生成这些序列时会停止。
           </p>
         </div>
-
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label>启用的 MCP 服务 (当前会话)</Label>
           {mcpServers.length === 0 ? (
             <p className="text-xs text-muted-foreground">没有可配置的 MCP 服务。请先在全局设置中添加。</p>
@@ -256,108 +317,11 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
               ))}
             </div>
           )}
-           <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             选择在此次对话中允许 AI 使用的 MCP 服务。
           </p>
         </div>
-        {/* topP、presence_penalty、frequency_penalty、structured_output、stream、user、logit_bias */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="top-p">Top P</Label>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="top-p"
-                type="number"
-                value={topP ?? ""}
-                onChange={e => setTopP(e.target.value ? parseFloat(e.target.value) : undefined)}
-                step="0.01"
-                min="0"
-                max="1"
-                placeholder="可选"
-                className="text-xs"
-                style={{ width: "80px" }}
-              />
-              <span className="text-xs text-gray-500">{topP ?? ""}</span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="presence-penalty">Presence Penalty</Label>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="presence-penalty"
-                type="number"
-                value={presencePenalty ?? ""}
-                onChange={e => setPresencePenalty(e.target.value ? parseFloat(e.target.value) : undefined)}
-                step="0.01"
-                min="-2"
-                max="2"
-                placeholder="可选"
-                className="text-xs"
-                style={{ width: "80px" }}
-              />
-              <span className="text-xs text-gray-500">{presencePenalty ?? ""}</span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="frequency-penalty">Frequency Penalty</Label>
-            <div className="flex items-center space-x-2">
-              <Input
-                id="frequency-penalty"
-                type="number"
-                value={frequencyPenalty ?? ""}
-                onChange={e => setFrequencyPenalty(e.target.value ? parseFloat(e.target.value) : undefined)}
-                step="0.01"
-                min="-2"
-                max="2"
-                placeholder="可选"
-                className="text-xs"
-                style={{ width: "80px" }}
-              />
-              <span className="text-xs text-gray-500">{frequencyPenalty ?? ""}</span>
-            </div>
-          </div>
-          <div className="space-y-2 flex items-center mt-6">
-            <Checkbox
-              id="structured-output"
-              checked={structuredOutput}
-              onCheckedChange={v => setStructuredOutput(v === true)}
-            />
-            <Label htmlFor="structured-output" className="ml-2 text-xs">结构化输出 (Structured Output)</Label>
-          </div>
-          {structuredOutput && (
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="json-schema">自定义 JSON Schema</Label>
-              <Textarea
-                id="json-schema"
-                value={jsonSchemaInput}
-                onChange={e => setJsonSchemaInput(e.target.value)}
-                placeholder='输入一个OpenAPI schema对象来约束模型输出。有关示例，请参阅API文档。'
-                rows={4}
-                className="text-xs font-mono"
-              />
-            </div>
-          )}
-          <div className="space-y-2 flex items-center mt-6">
-            <Checkbox
-              id="stream"
-              checked={stream}
-              onCheckedChange={v => setStream(v === true)}
-            />
-            <Label htmlFor="stream" className="ml-2 text-xs">流式响应 (Stream)</Label>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="user">User (API参数)</Label>
-            <Input
-              id="user"
-              type="text"
-              value={user ?? ""}
-              onChange={e => setUser(e.target.value)}
-              placeholder="可选"
-              className="text-xs"
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="logit-bias">Logit Bias (JSON)</Label>
           <Textarea
             id="logit-bias"
@@ -368,12 +332,12 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
             className="text-xs font-mono"
           />
         </div>
-
         <Button onClick={handleSaveSettings} className="w-full mt-2" size="sm">
           应用设置
         </Button>
       </div>
-    );
+    </div>
+  );
   };
 
-export default ChatSettingsPanel;
+export { ChatSettingsPanel };

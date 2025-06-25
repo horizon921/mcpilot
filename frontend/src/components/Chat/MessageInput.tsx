@@ -84,7 +84,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
       )}
       <div className="flex items-end space-x-2">
         {/* ChatSettingsPanel has been moved to ChatPage.tsx to be placed in a header */}
-        <Button variant="ghost" size="icon" onClick={triggerFileInput} title="添加附件" disabled={isLoading} className="text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary-light">
+        <Button variant="ghost" size="icon" onClick={triggerFileInput} title="添加附件" disabled={isLoading} className="text-gray-500 hover:text-[var(--color-primary)] dark:text-gray-400 dark:hover:text-[var(--color-primary)]">
           <Paperclip size={20} />
         </Button>
         <input
@@ -101,7 +101,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder="输入消息... (Shift+Enter 换行)"
-          className="flex-grow resize-none overflow-y-auto max-h-48 min-h-[42px] p-2.5 text-sm border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-750 dark:text-gray-50" // Adjusted padding, border, max-height, min-height
+          className="flex-grow resize-none overflow-y-auto max-h-48 min-h-[42px] p-2.5 text-sm border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] dark:bg-gray-750 dark:text-gray-50" // Adjusted padding, border, max-height, min-height
           rows={1}
           disabled={isLoading}
         />
@@ -114,7 +114,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           disabled={isLoading || (!inputValue.trim() && attachments.length === 0)}
           size="icon"
           title="发送"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90 shrink-0" // Prominent send button
+          className="bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary)]/90 dark:bg-[var(--color-primary)] dark:hover:bg-[var(--color-primary)]/90 shrink-0" // Prominent send button
         >
           <Send size={20} />
         </Button>

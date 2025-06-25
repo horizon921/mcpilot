@@ -221,7 +221,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
               </div>
               <div className="flex items-center flex-shrink-0 ml-2">
                 {toolCall.status === 'calling' && (
-                  <span className="flex items-center text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                  <span className="flex items-center text-xs text-[var(--color-primary)] whitespace-nowrap">
                     <RefreshCw size={12} className="mr-1 animate-spin flex-shrink-0" />
                     调用中...
                   </span>
@@ -449,7 +449,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
     );
   };
 
-  const userMessageClasses = "bg-blue-500 text-white dark:bg-blue-600 dark:text-blue-50";
+  const userMessageClasses = "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] dark:bg-[var(--color-primary)] dark:text-[var(--color-primary-foreground)]";
   const assistantMessageClasses = "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100";
   const messageBgColor = role === "user" ? userMessageClasses : assistantMessageClasses;
 

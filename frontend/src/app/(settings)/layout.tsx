@@ -46,7 +46,7 @@ export default function SettingsLayout({
                   className={classNames(
                     "flex items-center p-2 rounded-md text-sm hover:bg-gray-200 dark:hover:bg-gray-700",
                     {
-                      "bg-primary/20 dark:bg-primary/30 text-primary-foreground font-medium": isActive,
+                      "bg-[var(--color-primary)]/10 dark:bg-[var(--color-primary)]/20 text-[var(--color-primary-foreground)] font-medium": isActive,
                       "text-gray-700 dark:text-gray-300": !isActive,
                     }
                   )}

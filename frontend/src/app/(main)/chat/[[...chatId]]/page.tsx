@@ -694,9 +694,11 @@ const handleBranchMessage = (messageId: string) => {
             </div>
             <div className="flex items-center space-x-2">
               {/* Button to toggle ChatDetailPanel */}
-              <Button variant="ghost" size="icon" onClick={toggleChatDetailPanel} title="聊天设置与详情">
-                <Settings size={20} />
-              </Button>
+              {!isChatDetailPanelOpen && (
+                <Button variant="ghost" size="icon" onClick={toggleChatDetailPanel} title="聊天设置与详情">
+                  <Settings size={20} />
+                </Button>
+              )}
             </div>
           </header>
         )}
@@ -717,13 +719,18 @@ const handleBranchMessage = (messageId: string) => {
       </main>
 
       {/* Right Chat Detail Panel */}
-      {isChatDetailPanelOpen && (
+      <div
+        className={`fixed right-0 top-0 h-full z-30 transition-transform duration-300 ease-in-out
+          ${isChatDetailPanelOpen ? "translate-x-0" : "translate-x-full"}
+          w-80 md:w-96`}
+        style={{ willChange: "transform" }}
+      >
         <ChatDetailPanel
           isOpen={isChatDetailPanelOpen}
           onClose={() => setChatDetailPanelOpen(false)}
           activeChatSession={activeSession}
         />
-      )}
+      </div>
     </div>
   );
 }

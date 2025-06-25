@@ -7,11 +7,13 @@ import type { MCPServerInfo, MCPServerPayload } from '@/types/mcp'; // Import MC
 // Helper to generate ID if needed, or assume IDs come from a backend/user input
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
 
+export type ThemeColor = "default" | "green" | "orange" | "purple";
+
 export interface SettingsStoreState {
   providers: AIProvider[];
   models: AIModel[];
   mcpServers: MCPServerInfo[]; // New state for MCP Servers
-  appSettings: AppSettings;
+  appSettings: Omit<AppSettings, "theme"> & { themeColor?: ThemeColor };
   // For managing API keys securely - this is a placeholder.
   // In a real app, API keys should ideally be handled server-side or via secure storage.
   // For local-first apps, they might be stored here but with strong warnings to the user.
@@ -32,8 +34,8 @@ export interface SettingsStoreState {
   setDefaultModel: (modelId: string | undefined) => void; // Sets global default
 
   // --- AppSettings Actions ---
-  updateAppSettings: (settings: Partial<AppSettings>) => void;
-  setTheme: (theme: AppSettings["theme"]) => void;
+  updateAppSettings: (settings: Partial<Omit<AppSettings, "theme"> & { themeColor?: ThemeColor }>) => void;
+  setThemeColor: (color: ThemeColor) => void;
   toggleInputPreprocessing: (enabled: boolean) => void;
 
   // --- API Key Actions (handle with care) ---
@@ -65,7 +67,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         ],
         mcpServers: [], // Initialize MCP Servers as empty
         appSettings: {
-          theme: "system", // Default theme
+          themeColor: "default", // 只保留主题色
           defaultModelId: "gpt-4-default",
           enableInputPreprocessing: true, // Default to true
         },
@@ -138,13 +140,10 @@ export const useSettingsStore = create<SettingsStoreState>()(
             appSettings: { ...state.appSettings, ...settings },
           }));
         },
-        setTheme: (theme) => {
-          console.log('[SettingsStore] setTheme called with:', theme);
-          set((state) => {
-            const newAppSettings = { ...state.appSettings, theme };
-            console.log('[SettingsStore] New appSettings after setTheme:', newAppSettings);
-            return { appSettings: newAppSettings };
-          });
+        setThemeColor: (color) => {
+          set((state) => ({
+            appSettings: { ...state.appSettings, themeColor: color }
+          }));
         },
         toggleInputPreprocessing: (enabled) => {
           set((state) => ({

@@ -93,7 +93,7 @@ const ChatSidebar: React.FC = () => {
             className={classNames(
               "flex items-center justify-between p-2 rounded-lg group transition-colors duration-150",
               {
-                "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300": activeChatId === session.id,
+                "bg-[var(--color-primary)/10] dark:bg-[var(--color-primary)/20] text-[var(--color-primary)] dark:text-[var(--color-primary)] font-semibold": activeChatId === session.id,
                 "hover:bg-gray-200/70 dark:hover:bg-gray-800/60 text-gray-700 dark:text-gray-300": activeChatId !== session.id,
                 "justify-center": isSidebarCollapsed,
               }

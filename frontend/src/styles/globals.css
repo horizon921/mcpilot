@@ -1,3 +1,5 @@
+/* stylelint-disable */
+/* tailwindcss */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,12 +9,74 @@
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
 
-  /* Custom theme variables (light mode default) */
+  /* 默认主题（深海蓝） */
   --color-primary: theme('colors.primary.DEFAULT');
   --color-secondary: theme('colors.secondary.DEFAULT');
   --color-background: theme('colors.background.light');
   --color-foreground: theme('colors.foreground.light');
-  --color-accent: theme('colors.accent.light');
+  --color-accent: #e6ecfa; /* 高饱和蓝灰 */
+  --color-panel: #f3f7fd;  /* 主内容区/卡片背景 */
+  --color-card: #f8fafc;   /* 卡片/输入框背景 */
+}
+
+/* 绿色主题 */
+.theme-green {
+  --color-primary: theme('colors.primary.green');
+  --color-secondary: theme('colors.secondary.teal');
+  --color-background: theme('colors.background.light');
+  --color-foreground: theme('colors.foreground.light');
+  --color-accent: #d1f5e1; /* 绿灰 */
+  --color-panel: #eafaf2;  /* 主内容区/卡片背景 */
+  --color-card: #f4fdf8;   /* 卡片/输入框背景 */
+}
+
+/* 橙色主题 */
+.theme-orange {
+  --color-primary: theme('colors.primary.orange');
+  --color-secondary: theme('colors.secondary.yellow');
+  --color-background: theme('colors.background.light');
+  --color-foreground: theme('colors.foreground.light');
+  --color-accent: #ffe7c2; /* 橙灰 */
+  --color-panel: #fff7ed;  /* 主内容区/卡片背景 */
+  --color-card: #fffaf5;   /* 卡片/输入框背景 */
+}
+
+/* 紫色主题 */
+.theme-purple {
+  --color-primary: theme('colors.primary.purple');
+  --color-secondary: theme('colors.secondary.DEFAULT');
+  --color-background: theme('colors.background.light');
+  --color-foreground: theme('colors.foreground.light');
+  --color-accent: #e6e1fa; /* 紫灰 */
+  --color-panel: #f6f3fd;  /* 主内容区/卡片背景 */
+  --color-card: #faf7fd;   /* 卡片/输入框背景 */
+}
+
+/* 绿色主题 */
+.theme-green {
+  --color-primary: theme('colors.primary.green');
+  --color-secondary: theme('colors.secondary.teal');
+  --color-background: theme('colors.background.green');
+  --color-foreground: theme('colors.foreground.green');
+  --color-accent: theme('colors.accent.green');
+}
+
+/* 橙色主题 */
+.theme-orange {
+  --color-primary: theme('colors.primary.orange');
+  --color-secondary: theme('colors.secondary.yellow');
+  --color-background: theme('colors.background.orange');
+  --color-foreground: theme('colors.foreground.orange');
+  --color-accent: theme('colors.accent.orange');
+}
+
+/* 紫色主题 */
+.theme-purple {
+  --color-primary: theme('colors.primary.purple');
+  --color-secondary: theme('colors.secondary.DEFAULT');
+  --color-background: theme('colors.background.purple');
+  --color-foreground: theme('colors.foreground.purple');
+  --color-accent: theme('colors.accent.purple');
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,16 +88,8 @@
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  /* Use theme variables */
-  background-color: var(--color-background);
   color: var(--color-foreground);
+  background-color: var(--color-background);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -41,14 +97,44 @@ body {
 .dark {
   --color-primary: theme('colors.primary.dark');
   --color-secondary: theme('colors.secondary.dark');
-  --color-background: theme('colors.background.dark');
-  --color-foreground: theme('colors.foreground.dark');
-  --color-accent: theme('colors.accent.dark');
-
-  /* Override Next.js default dark mode if needed, or integrate */
+  --color-background: #181c20;
+  --color-foreground: #fff;
+  --color-accent: #233a5a; /* 深蓝灰 */
+  --color-panel: #1a2330;
+  --color-card: #232d3a;
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: theme('colors.background.dark'); /* Use Tailwind dark bg */
-  --background-end-rgb: theme('colors.background.dark');   /* Use Tailwind dark bg */
+  --background-start-rgb: #181c20;
+  --background-end-rgb: #181c20;
+}
+
+.dark.theme-green {
+  --color-primary: theme('colors.primary.green');
+  --color-secondary: theme('colors.secondary.teal');
+  --color-background: #16241b;
+  --color-foreground: #fff;
+  --color-accent: #1b3a2a;
+  --color-panel: #1a2d23;
+  --color-card: #1e3328;
+}
+
+.dark.theme-orange {
+  --color-primary: theme('colors.primary.orange');
+  --color-secondary: theme('colors.secondary.yellow');
+  --color-background: #241c16;
+  --color-foreground: #fff;
+  --color-accent: #3a2a1b;
+  --color-panel: #2d231a;
+  --color-card: #33281e;
+}
+
+.dark.theme-purple {
+  --color-primary: theme('colors.primary.purple');
+  --color-secondary: theme('colors.secondary.DEFAULT');
+  --color-background: #1a1624;
+  --color-foreground: #fff;
+  --color-accent: #2a1b3a;
+  --color-panel: #231a2d;
+  --color-card: #281e33;
 }
 
 /* Basic scrollbar styling */

@@ -63,34 +63,59 @@ export const Slider: React.FC<SliderProps> = ({
           onTouchStart={() => setIsDragging(true)}
           onTouchEnd={() => setIsDragging(false)}
           className={classNames(
-            "w-full h-2 rounded-lg appearance-none bg-accent focus:outline-none focus:ring-2 focus:ring-primary transition",
+            "w-full h-2 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-primary transition",
             "slider-thumb"
           )}
-          style={{
-            accentColor: "var(--color-primary)",
-          }}
           {...props}
         />
         {showValue && (
           <span
-            className="text-xs min-w-[36px] text-right"
-            style={{ color: "var(--color-primary)" }}
+            className="text-xs min-w-[36px] text-right text-foreground" // Use text-foreground for value color
           >
             {internalValue}
           </span>
         )}
       </div>
       <style jsx>{`
+        input[type="range"].slider-thumb {
+          /* Base track style */
+          background: linear-gradient(to right, var(--color-primary) var(--value, 0%), var(--color-accent) var(--value, 0%));
+          background-size: 100% 100%;
+          background-repeat: no-repeat;
+        }
+
+        input[type="range"].slider-thumb::-webkit-slider-runnable-track {
+          width: 100%;
+          height: 4px; /* Make track slightly thicker */
+          background: var(--color-accent);
+          border-radius: 2px;
+        }
+
         input[type="range"].slider-thumb::-webkit-slider-thumb {
           appearance: none;
           width: 16px;
           height: 16px;
           border-radius: 50%;
           background: var(--color-primary);
-          border: 2px solid var(--color-background);
+          border: 2px solid var(--color-background); /* Use background for border */
           box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-          transition: background 0.2s;
+          margin-top: -6px; /* Adjust thumb position */
+          transition: background 0.2s, border-color 0.2s;
         }
+
+        input[type="range"].slider-thumb:focus::-webkit-slider-thumb {
+          outline: 2px solid var(--color-primary);
+          outline-offset: 2px;
+        }
+
+        /* Firefox specific styles */
+        input[type="range"].slider-thumb::-moz-range-track {
+          width: 100%;
+          height: 4px;
+          background: var(--color-accent);
+          border-radius: 2px;
+        }
+
         input[type="range"].slider-thumb::-moz-range-thumb {
           width: 16px;
           height: 16px;
@@ -98,8 +123,33 @@ export const Slider: React.FC<SliderProps> = ({
           background: var(--color-primary);
           border: 2px solid var(--color-background);
           box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-          transition: background 0.2s;
+          transition: background 0.2s, border-color 0.2s;
         }
+
+        input[type="range"].slider-thumb:focus::-moz-range-thumb {
+          outline: 2px solid var(--color-primary);
+          outline-offset: 2px;
+        }
+
+        /* IE/Edge specific styles */
+        input[type="range"].slider-thumb::-ms-track {
+          width: 100%;
+          height: 4px;
+          background: transparent; /* Needed for IE/Edge */
+          border-color: transparent;
+          color: transparent;
+        }
+
+        input[type="range"].slider-thumb::-ms-fill-lower {
+          background: var(--color-primary);
+          border-radius: 2px;
+        }
+
+        input[type="range"].slider-thumb::-ms-fill-upper {
+          background: var(--color-accent);
+          border-radius: 2px;
+        }
+
         input[type="range"].slider-thumb::-ms-thumb {
           width: 16px;
           height: 16px;
@@ -107,20 +157,17 @@ export const Slider: React.FC<SliderProps> = ({
           background: var(--color-primary);
           border: 2px solid var(--color-background);
           box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-          transition: background 0.2s;
+          transition: background 0.2s, border-color 0.2s;
         }
-        input[type="range"].slider-thumb:focus::-webkit-slider-thumb {
+
+        input[type="range"].slider-thumb:focus::-ms-thumb {
           outline: 2px solid var(--color-primary);
+          outline-offset: 2px;
         }
-        input[type="range"].slider-thumb::-webkit-slider-runnable-track {
-          height: 2px;
-          background: var(--color-accent);
-        }
-        input[type="range"].slider-thumb::-ms-fill-lower {
-          background: var(--color-accent);
-        }
-        input[type="range"].slider-thumb::-ms-fill-upper {
-          background: var(--color-accent);
+
+        /* Dynamic background for filled portion */
+        input[type="range"].slider-thumb {
+          --value: calc((var(--internal-value) - var(--min)) / (var(--max) - var(--min)) * 100%);
         }
       `}</style>
     </div>

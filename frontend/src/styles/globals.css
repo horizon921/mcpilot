@@ -23,42 +23,11 @@
 .theme-green {
   --color-primary: theme('colors.primary.green');
   --color-secondary: theme('colors.secondary.teal');
-  --color-background: theme('colors.background.light');
-  --color-foreground: theme('colors.foreground.light');
-  --color-accent: #d1f5e1; /* 绿灰 */
-  --color-panel: #eafaf2;  /* 主内容区/卡片背景 */
-  --color-card: #f4fdf8;   /* 卡片/输入框背景 */
-}
-
-/* 橙色主题 */
-.theme-orange {
-  --color-primary: theme('colors.primary.orange');
-  --color-secondary: theme('colors.secondary.yellow');
-  --color-background: theme('colors.background.light');
-  --color-foreground: theme('colors.foreground.light');
-  --color-accent: #ffe7c2; /* 橙灰 */
-  --color-panel: #fff7ed;  /* 主内容区/卡片背景 */
-  --color-card: #fffaf5;   /* 卡片/输入框背景 */
-}
-
-/* 紫色主题 */
-.theme-purple {
-  --color-primary: theme('colors.primary.purple');
-  --color-secondary: theme('colors.secondary.DEFAULT');
-  --color-background: theme('colors.background.light');
-  --color-foreground: theme('colors.foreground.light');
-  --color-accent: #e6e1fa; /* 紫灰 */
-  --color-panel: #f6f3fd;  /* 主内容区/卡片背景 */
-  --color-card: #faf7fd;   /* 卡片/输入框背景 */
-}
-
-/* 绿色主题 */
-.theme-green {
-  --color-primary: theme('colors.primary.green');
-  --color-secondary: theme('colors.secondary.teal');
   --color-background: theme('colors.background.green');
-  --color-foreground: theme('colors.foreground.green');
+  --color-foreground: theme('colors.foreground.light'); /* 保持字体中性 */
   --color-accent: theme('colors.accent.green');
+  --color-panel: theme('colors.background.green');
+  --color-card: #f8fffb; /* 浅绿色 */
 }
 
 /* 橙色主题 */
@@ -66,8 +35,10 @@
   --color-primary: theme('colors.primary.orange');
   --color-secondary: theme('colors.secondary.yellow');
   --color-background: theme('colors.background.orange');
-  --color-foreground: theme('colors.foreground.orange');
+  --color-foreground: theme('colors.foreground.light'); /* 保持字体中性 */
   --color-accent: theme('colors.accent.orange');
+  --color-panel: theme('colors.background.orange');
+  --color-card: #fffaf5; /* 浅橙色 */
 }
 
 /* 紫色主题 */
@@ -75,8 +46,10 @@
   --color-primary: theme('colors.primary.purple');
   --color-secondary: theme('colors.secondary.DEFAULT');
   --color-background: theme('colors.background.purple');
-  --color-foreground: theme('colors.foreground.purple');
+  --color-foreground: theme('colors.foreground.light'); /* 保持字体中性 */
   --color-accent: theme('colors.accent.purple');
+  --color-panel: theme('colors.background.purple');
+  --color-card: #faf7fd; /* 浅紫色 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -90,21 +63,19 @@
 body {
   color: var(--color-foreground);
   background-color: var(--color-background);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  /* Removed transition for immediate theme color changes */
 }
 
 /* Dark mode specific styles using a class */
 .dark {
-  --color-primary: theme('colors.primary.dark');
-  --color-secondary: theme('colors.secondary.dark');
-  --color-background: #181c20;
-  --color-foreground: #fff;
-  --color-accent: #233a5a; /* 深蓝灰 */
-  --color-panel: #1a2330;
-  --color-card: #232d3a;
+  --color-background: theme('colors.background.dark');
+  --color-foreground: theme('colors.foreground.dark');
+  --color-accent: theme('colors.accent.dark');
+  --color-panel: #1f2937; /* gray-800 */
+  --color-card: #2d3748; /* gray-700 的深色版本 */
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: #181c20;
-  --background-end-rgb: #181c20;
+  --background-start-rgb: theme('colors.background.dark');
+  --background-end-rgb: theme('colors.background.dark');
 }
 
 .dark.theme-green {
@@ -149,12 +120,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
+  background: rgba(var(--foreground-rgb), 0.3); /* Use foreground color with transparency */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: theme('colors.primary.light'); /* A bit lighter on hover */
+  background: rgba(var(--foreground-rgb), 0.5); /* Darker on hover */
 }
 
 /* Ensure full height for layout */

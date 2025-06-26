@@ -59,7 +59,7 @@ const ChatSidebar: React.FC = () => {
 
   return (
     <aside className={classNames(
-      "bg-gray-50 dark:bg-gray-900/80 backdrop-blur-sm flex flex-col h-full border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out",
+      "bg-[var(--color-panel)] backdrop-blur-sm flex flex-col h-full border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out",
       {
         "w-72 p-4": !isSidebarCollapsed,
         "w-16 p-2 items-center": isSidebarCollapsed,

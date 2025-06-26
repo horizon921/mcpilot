@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * 强制清理 localStorage 里的 theme 字段，防止 next-themes 初始化时被旧值覆盖
  */
@@ -6,7 +8,6 @@ if (typeof window !== "undefined") {
     localStorage.removeItem("theme");
   } catch {}
 }
-"use client";
 
 import React, { useState } from 'react'; // Added useState
 import { useSettingsStore, ThemeColor } from '@/store/settingsStore';
@@ -16,7 +17,7 @@ import { Label } from '@/components/Common/Label';
 import { Sun, Moon, Laptop, Palette, Leaf, Flame, Gem } from 'lucide-react';
 import { useTheme } from "next-themes";
 
-type ThemeOption = "light" | "dark" | "system";
+type ThemeOption = "light" | "dark" | "system"; // Re-declare ThemeOption locally
 
 const themeOptions: { value: ThemeOption; label: string; icon: React.ElementType }[] = [
   { value: 'light', label: '浅色模式', icon: Sun },
@@ -34,13 +35,13 @@ const themeColorOptions: { value: ThemeColor; label: string; icon: React.Element
 export default function ApplicationSettingsPage() {
   const { appSettings, setThemeColor, updateAppSettings } = useSettingsStore();
   const currentThemeColor = appSettings.themeColor || "default";
-  const { theme, setTheme } = useTheme();
+  const { theme: nextTheme, setTheme: setNextThemesTheme } = useTheme();
 
   // 按钮高亮直接用 useTheme() 的 theme
-  const currentTheme = theme || "system";
+  const currentTheme = nextTheme || "system";
 
   const handleThemeChange = (selectedTheme: ThemeOption) => {
-    setTheme(selectedTheme);
+    setNextThemesTheme(selectedTheme); // Only update next-themes
   };
 
   // 仅用于模型参数设置

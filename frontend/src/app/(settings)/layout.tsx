@@ -23,7 +23,7 @@ export default function SettingsLayout({
 
   return (
     <div className="flex flex-col md:flex-row h-full">
-      <nav className="w-full md:w-60 bg-gray-100 dark:bg-gray-900 p-4 border-b md:border-b-0 md:border-r border-accent">
+      <nav className="w-full md:w-60 bg-[var(--color-panel)] p-4 border-b md:border-b-0 md:border-r border-accent">
         <h2 className="text-xl font-semibold mb-6">设置</h2>
         <ul className="space-y-2">
           <li>

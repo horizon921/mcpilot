@@ -60,7 +60,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
 
   return (
-    <div className="flex flex-col h-full bg-background dark:bg-gray-800"> {/* Use bg-background for consistency */}
+    <div className="flex flex-col h-full bg-background"> {/* Use bg-background for consistency */}
       <ScrollArea className="flex-grow" onScrollCapture={handleScroll}> {/* Use ScrollArea, onScrollCapture might work or need adjustment */}
         <div className="p-4 space-y-4"> {/* Inner div for padding and message spacing */}
           {messages.map((msg) => (

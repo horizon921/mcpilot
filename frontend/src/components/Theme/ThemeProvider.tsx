@@ -17,6 +17,7 @@ export default function ThemeProvider({ children, ...props }: ThemeProviderProps
     }
   }, [themeColor]);
 
+
   // 必须传递 attribute="class" 让 next-themes 控制 .dark class
   return (
     <NextThemesProvider attribute="class" {...props}>

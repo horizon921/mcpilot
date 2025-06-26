@@ -24,7 +24,7 @@ const ChatDetailPanel: React.FC<ChatDetailPanelProps> = ({
 
   // 右侧面板常驻渲染，由父组件控制动画和显示
   return (
-    <aside className="w-full h-full flex flex-col border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+    <aside className="w-full h-full flex flex-col border-l border-gray-200 dark:border-gray-700 bg-[var(--color-panel)] shadow-xl">
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold">聊天详情与设置</h2>
         <Button variant="ghost" size="icon" onClick={onClose} title="关闭面板">

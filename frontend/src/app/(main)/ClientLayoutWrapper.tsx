@@ -14,22 +14,32 @@ interface ClientLayoutWrapperProps {
 
 const ClientLayoutWrapper: React.FC<ClientLayoutWrapperProps> = ({ children }) => {
   const { isSidebarOpen, toggleSidebar, setSidebarOpen } = useUIStore();
-  const storeTheme = useSettingsStore(state => state.appSettings.theme);
-  const { setTheme: setNextThemesTheme } = useTheme();
+  const themeColor = useSettingsStore(state => state.appSettings.themeColor || "default");
+  const { setTheme: setNextThemesTheme, theme: currentNextTheme } = useTheme();
   const [hasMounted, setHasMounted] = React.useState(false);
 
   React.useEffect(() => {
     setHasMounted(true);
   }, []);
 
-  // Effect to sync theme from settingsStore to next-themes
+  // Effect to apply themeColor class to documentElement and ensure next-themes re-applies theme
   useEffect(() => {
-    console.log('[ThemeSync] Detected storeTheme:', storeTheme);
-    if (storeTheme) {
-      console.log('[ThemeSync] Applying to next-themes:', storeTheme);
-      setNextThemesTheme(storeTheme);
+    if (typeof window !== "undefined") {
+      const root = document.documentElement;
+      // Remove all existing theme- classes
+      root.classList.remove("theme-default", "theme-green", "theme-orange", "theme-purple");
+      // Add the current themeColor class
+      root.classList.add(`theme-${themeColor}`);
+
+      // Force next-themes to re-evaluate and apply the current theme
+      // This is crucial to ensure next-themes re-renders and applies its internal logic
+      // even if the dark/light mode itself hasn't changed, but the themeColor has.
+      setNextThemesTheme(currentNextTheme || "system");
+
+      // Force browser reflow to ensure immediate CSS application
+      root.offsetHeight;
     }
-  }, [storeTheme, setNextThemesTheme]);
+  }, [themeColor, setNextThemesTheme, currentNextTheme]);
 
   // Optional: Close sidebar on small screens by default and when navigating
   React.useEffect(() => {

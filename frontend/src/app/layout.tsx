@@ -19,6 +19,41 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${inter.className} bg-background text-foreground overflow-hidden flex flex-col min-h-screen`}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function getInitialTheme() {
+                  try {
+                    const theme = localStorage.getItem('theme');
+                    if (theme) return theme;
+                    return 'system';
+                  } catch (e) {
+                    return 'system';
+                  }
+                }
+                function getInitialThemeClass() {
+                  try {
+                    const themeClassName = localStorage.getItem('theme-class');
+                    if (themeClassName) return themeClassName;
+                    return ''; // Default theme has no class
+                  } catch (e) {
+                    return '';
+                  }
+                }
+                const initialTheme = getInitialTheme();
+                const initialThemeClass = getInitialThemeClass();
+                const root = document.documentElement;
+                if (initialTheme === 'dark' || (initialTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  root.classList.add('dark');
+                }
+                if (initialThemeClass) {
+                  root.classList.add(initialThemeClass);
+                }
+              })();
+            `,
+          }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -68,13 +68,13 @@ export default function AIModelsPage() {
       ) : modelsWithProviderInfo.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {modelsWithProviderInfo.map((model) => (
-            <div key={model.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 space-y-3 relative">
+            <div key={model.id} className="bg-[var(--color-card)] shadow-md rounded-lg p-6 space-y-3 relative">
               {model.id === appSettings.defaultModelId && (
                 <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center">
                   <CheckCircle2 size={12} className="mr-1"/> 默认
                 </div>
               )}
-              <h2 className="text-xl font-semibold text-primary dark:text-primary-light pr-16">{model.name}</h2>
+              <h2 className="text-xl font-semibold text-[var(--color-primary)] pr-16">{model.name}</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 ID (自定义): <span className="font-medium">{model.id}</span>
               </p>

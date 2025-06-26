@@ -57,14 +57,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
   devtools(
     persist(
       (set, get) => ({
-        providers: [
-          // Example initial provider (consider removing for production)
-          { id: "openai-default", name: "OpenAI", type: "openai", baseUrl: "https://api.openai.com/v1" },
-        ],
-        models: [
-          // Example initial model for OpenAI (consider removing)
-          { id: "gpt-4-default", name: "GPT-4 (Example)", providerId: "openai-default", modelNativeId: "gpt-4", maxTokens: 4096, supportsStreaming: true, supportsSystemPrompt: true, isDefault: true },
-        ],
+        providers: [],
+        models: [],
         mcpServers: [], // Initialize MCP Servers as empty
         appSettings: {
           themeColor: "default", // 只保留主题色

@@ -123,10 +123,10 @@ export default function MCPServersPage() {
       ) : (
         <div className="space-y-4">
           {mcpServers.map((server) => (
-            <div key={server.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+            <div key={server.id} className="bg-[var(--color-card)] shadow-md rounded-lg p-6">
               <div className="flex justify-between items-start">
                 <div className="flex-grow">
-                  <h2 className="text-xl font-semibold text-primary dark:text-primary-light mb-1">{server.name}</h2>
+                  <h2 className="text-xl font-semibold text-[var(--color-primary)] mb-1">{server.name}</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     ID: <span className="font-mono">{server.id}</span>
                   </p>

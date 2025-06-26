@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { AIProvider, AIProviderType } from '@/types/config';
+import type { AIProvider } from '@/types/config';
 import { Button } from '@/components/Common/Button';
-import ProviderFormModal from '@/components/Settings/ProviderFormModal'; // To be created
+import ProviderFormModal from '@/components/Settings/ProviderFormModal';
 import { PlusCircle, Edit3, Trash2, Eye, EyeOff } from 'lucide-react';
 
 export default function AIProvidersPage() {
@@ -12,6 +12,11 @@ export default function AIProvidersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
   const [visibleApiKeys, setVisibleApiKeys] = useState<Record<string, boolean>>({});
+  const [hydrated, setHydrated] = useState(false);
+
+  React.useLayoutEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const handleAddNew = () => {
     setEditingProvider(null);
@@ -33,6 +38,14 @@ export default function AIProvidersPage() {
     setVisibleApiKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
+  if (!hydrated) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-500 dark:text-gray-400">正在加载设置...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -51,13 +64,13 @@ export default function AIProvidersPage() {
             const apiKey = getApiKey(provider.id);
             const isKeyVisible = visibleApiKeys[provider.id];
             return (
-              <div key={provider.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 space-y-3">
-                <h2 className="text-xl font-semibold text-primary dark:text-primary-light mb-1">{provider.name}</h2>
+              <div key={provider.id} className="bg-[var(--color-card)] shadow-md rounded-lg p-6 space-y-3">
+                <h2 className="text-xl font-semibold text-[var(--color-primary)] mb-1">{provider.name}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   ID: <span className="font-mono">{provider.id}</span>
                 </p>
                 <p className="text-sm text-gray-700 dark:text-gray-200 mt-2">
-                  类型: <span className="font-semibold px-2 py-0.5 bg-accent dark:bg-accent/50 rounded-full text-xs">{provider.type.toUpperCase()}</span>
+                  类型: <span className="font-semibold px-2 py-0.5 bg-accent dark:bg-accent/50 rounded-full text-xs">{(provider.type as string).toUpperCase()}</span>
                 </p>
                 {provider.baseUrl && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 break-all mt-1">
@@ -79,7 +92,7 @@ export default function AIProvidersPage() {
                     </div>
                   </div>
                 )}
-                {!apiKey && provider.type !== "custom" && ( // Assuming "custom" might not always need an API key directly
+                {!apiKey && provider.type !== "custom" && (
                     <p className="text-sm text-yellow-600 dark:text-yellow-400">
                       API Key 未设置。请<button onClick={() => handleEdit(provider)} className="text-blue-600 hover:underline focus:outline-none ml-1">编辑</button>以添加。
                     </p>

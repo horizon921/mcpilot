@@ -209,7 +209,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
           MCP工具调用
         </div>
         {message.mcpToolCalls.map((toolCall) => (
-          <div key={toolCall.tool_call_id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 w-full min-w-0">
+          <div key={toolCall.tool_call_id} className="bg-[var(--color-panel)] rounded-lg p-3 border border-gray-200 dark:border-gray-700 w-full min-w-0">
             <div className="flex items-center justify-between mb-2 min-w-0">
               <div className="flex items-center space-x-2 min-w-0 flex-1">
                 <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
@@ -450,7 +450,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
   };
 
   const userMessageClasses = "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] dark:bg-[var(--color-primary)] dark:text-[var(--color-primary-foreground)]";
-  const assistantMessageClasses = "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100";
+  const assistantMessageClasses = "bg-gray-100 text-gray-800 dark:bg-[var(--color-card)] dark:text-gray-100";
   const messageBgColor = role === "user" ? userMessageClasses : assistantMessageClasses;
 
   // Define specific rounded corners for a "speech bubble" effect

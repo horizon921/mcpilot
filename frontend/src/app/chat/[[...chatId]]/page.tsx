@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import ChatWindow from '@/components/Chat/ChatWindow';
 import MessageInput from '@/components/Chat/MessageInput'; // Re-add MessageInput import
@@ -11,7 +12,7 @@ import { Button } from '@/components/Common/Button'; // Import Button component
 import type { Message as MessageType } from '@/types/chat'; // Renamed to avoid conflict with React's Message type
 import { toast } from "sonner"; // For copy feedback
 import { v4 as uuidv4 } from 'uuid';
-import { Settings } from 'lucide-react'; // Import Settings icon for the new button
+import { ArrowLeft, Settings } from 'lucide-react'; // Import Settings icon for the new button
 import dynamic from 'next/dynamic';
 
 const ChatDetailPanel = dynamic(() => import('@/components/Chat/ChatDetailPanel'), { ssr: false });
@@ -25,7 +26,7 @@ export default function ChatPage() {
   const router = useRouter();
   const params = useParams();
   const chatIdFromParams = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
-  const [hasMounted, setHasMounted] = React.useState(false);
+  const [hydrated, setHydrated] = React.useState(false);
 
   const {
     activeChatId,
@@ -50,67 +51,62 @@ export default function ChatPage() {
   } = useUIStore();
 
   React.useEffect(() => {
-    setHasMounted(true);
+    // This effect runs only once on the client side after hydration
+    setHydrated(true);
   }, []);
 
   // Effect to handle chat session loading or creation based on URL
   useEffect(() => {
-    if (!hasMounted) return;
+    if (!hydrated) return; // Wait for store to be hydrated
 
     const store = useChatStore.getState(); // Get a consistent snapshot for this effect run
 
     if (chatIdFromParams) {
-      // URL has a specific chat ID
-      // Only call loadChatSession if the chatIdFromParams is different from the store's activeChatId
-      // or if there's no activeChatId in store yet (e.g. initial load with a direct URL to a chat)
-      if (chatIdFromParams !== store.activeChatId || !store.activeChatId) {
+      // If URL has a specific chat ID, try to load it
+      if (chatIdFromParams !== store.activeChatId) {
         if (store.chatSessions.some(s => s.id === chatIdFromParams)) {
-          loadChatSession(chatIdFromParams); // This action will set the activeChatId in the store
+          loadChatSession(chatIdFromParams);
         } else {
-          // Invalid chatId in URL (e.g., bookmark to a deleted session)
-          console.warn(`Chat session with ID ${chatIdFromParams} not found. Attempting to fall back.`);
-          // Fallback strategy:
-          if (store.activeChatId && store.chatSessions.some(s => s.id === store.activeChatId)) {
-            // If there's a valid active session in store, redirect to it
-            router.replace(`/chat/${store.activeChatId}`, { scroll: false });
-          } else if (store.chatSessions.length > 0) {
-            // If no valid active session, but other sessions exist, go to the most recent one
-            const sortedSessions = [...store.chatSessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-            router.replace(`/chat/${sortedSessions[0].id}`, { scroll: false });
+          // If chatId in URL is invalid, warn and redirect to a valid session or create new
+          console.warn(`Chat session with ID ${chatIdFromParams} not found. Redirecting.`);
+          const validSessionId = store.activeChatId && store.chatSessions.some(s => s.id === store.activeChatId)
+            ? store.activeChatId
+            : store.chatSessions.length > 0
+              ? [...store.chatSessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0].id
+              : null;
+          
+          if (validSessionId) {
+            router.replace(`/chat/${validSessionId}`, { scroll: false });
           } else {
-            // No sessions at all, create a new one
             const newSession = createChatSession(TEMP_USER_ID, "新对话 1", appSettings.defaultModelId);
             router.replace(`/chat/${newSession.id}`, { scroll: false });
           }
         }
       }
-      // If chatIdFromParams === store.activeChatId, it means the store is already aligned with the URL,
-      // or loadChatSession was just called and will update the store, triggering a re-render.
-      // No further action needed in this effect run for this case.
     } else {
-      // No chatId in URL (e.g., user navigated to /chat or from settings "Return to Chat")
-      if (store.activeChatId && store.chatSessions.some(s => s.id === store.activeChatId)) {
-        // If a valid active chat ID exists in the store, navigate to it.
-        router.replace(`/chat/${store.activeChatId}`, { scroll: false });
-      } else if (store.chatSessions.length > 0) {
-        // If no valid active chat, but other sessions exist, navigate to the most recent one.
-        const sortedSessions = [...store.chatSessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        router.replace(`/chat/${sortedSessions[0].id}`, { scroll: false });
+      // If no chatId in URL, redirect to an active session, most recent, or create new
+      const validSessionId = store.activeChatId && store.chatSessions.some(s => s.id === store.activeChatId)
+        ? store.activeChatId
+        : store.chatSessions.length > 0
+          ? [...store.chatSessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0].id
+          : null;
+
+      if (validSessionId) {
+        router.replace(`/chat/${validSessionId}`, { scroll: false });
       } else {
-        // No active chat and no sessions at all, create a new one.
         const newSession = createChatSession(TEMP_USER_ID, "新对话 1", appSettings.defaultModelId);
         router.replace(`/chat/${newSession.id}`, { scroll: false });
       }
     }
-  }, [hasMounted, chatIdFromParams, router, loadChatSession, createChatSession, appSettings.defaultModelId]); // Dependencies carefully chosen
+  }, [hydrated, chatIdFromParams, router, loadChatSession, createChatSession, appSettings.defaultModelId]); // Dependencies carefully chosen
 
   const messages = useMemo(() => {
-    if (!hasMounted || !activeChatId) return []; // Return empty array if not mounted or no active chat
+    if (!hydrated || !activeChatId) return []; // Return empty array if not mounted or no active chat
     return getActiveChatMessages(); // getActiveChatMessages already handles returning [] if activeChatId is null or messages[activeChatId] is undefined
-  }, [hasMounted, activeChatId, getActiveChatMessages, useChatStore.getState().messages[activeChatId || ""]]); // Depend on specific messages of active chat
+  }, [hydrated, activeChatId, getActiveChatMessages, useChatStore.getState().messages[activeChatId || ""]]); // Depend on specific messages of active chat
 
   const activeSession = useChatStore(state => {
-    if (!hasMounted || !state.activeChatId) return null;
+    if (!hydrated || !state.activeChatId) return null;
     return state.chatSessions.find(s => s.id === state.activeChatId); // More direct way to get active session
   });
 
@@ -444,7 +440,7 @@ export default function ChatPage() {
   };
 
   // Render loading states or ChatWindow based on hasMounted and activeSession
-  if (!hasMounted) {
+  if (!hydrated) {
     // Consistent loading state for server and initial client render before hydration
     // This should include the MessageInput structure if ChatWindow always renders it.
     return (
@@ -687,7 +683,11 @@ const handleBranchMessage = (messageId: string) => {
         {activeSession && (
           <header className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700 bg-background/95 backdrop-blur-sm sticky top-0 z-10 shrink-0">
             <div className="flex items-center min-w-0 space-x-2">
-              {/* TODO: Add button for left sidebar toggle here */}
+              <Link href="/">
+                <Button variant="ghost" size="icon" title="返回主页">
+                  <ArrowLeft size={20} />
+                </Button>
+              </Link>
               <h1 className="text-lg font-semibold truncate" title={activeSession.title}>
                 {activeSession.title || "新对话"}
               </h1>

@@ -122,7 +122,7 @@ const ChatSettingsPanel: React.FC<ChatSettingsPanelProps> = ({ activeChatSession
   if (!activeChatSession) return null;
 
   return (
-    <div className="w-full h-full flex flex-col p-4 space-y-4 overflow-y-auto bg-white dark:bg-gray-800">
+    <div className="w-full h-full flex flex-col p-4 space-y-4 overflow-y-auto bg-[var(--color-panel)]">
       <div className="space-y-1">
         <h4 className="font-medium leading-none">聊天设置</h4>
         <p className="text-xs text-muted-foreground">

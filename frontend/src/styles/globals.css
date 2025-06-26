@@ -70,9 +70,9 @@ body {
 .dark {
   --color-background: theme('colors.background.dark');
   --color-foreground: theme('colors.foreground.dark');
-  --color-accent: theme('colors.accent.dark');
-  --color-panel: #1f2937; /* gray-800 */
-  --color-card: #2d3748; /* gray-700 的深色版本 */
+  --color-accent: #1f2937; /* gray-800 */
+  --color-panel: #111827; /* gray-900 */
+  --color-card: #1f2937; /* gray-800 */
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: theme('colors.background.dark');
   --background-end-rgb: theme('colors.background.dark');

@@ -1,275 +1,165 @@
-# 🧮 超级计算器 MCP 服务器
+# 计算器 MCP 服务器
 
-一个专业的数学计算 MCP 服务器，专注于高级矩阵运算和微积分计算，为AI Agent提供强大的数学计算能力。
+这是一个基于 MCP (Model Context Protocol) 的计算器服务器，提供基础和高级数学计算功能。
 
-## 🌟 特性
+## 🧮 功能特性
 
-- 🔢 **高级矩阵运算** - 特征值分解、SVD、矩阵分解等
-- ∫ **完整微积分系统** - 符号微积分、数值计算、向量微积分
-- 🌀 **复数运算** - 完整的复数数学支持
-- 📏 **单位转换** - 多种单位类别转换
-- 🎯 **高精度计算** - 基于 NumPy、SciPy、SymPy
+- ➕ **基础计算**: 四则运算、括号、数学函数
+- 🔢 **高级计算**: 阶乘、幂运算、开方、百分比、复利计算
+- 📝 **历史记录**: 保存和查看计算历史
+- 💾 **内存功能**: 存储、回忆、累加计算结果
 
-## 📦 安装
+## 🚀 快速开始
 
-### 1. 克隆或下载项目文件
+### 1. 安装依赖
 ```bash
-# 确保你有以下文件：
-# - server.py
-# - install_deps.py
-# - test.py
+pip install -r requirements.txt
 ```
 
-### 2. 安装依赖
+### 2. 启动服务器
 ```bash
-python install_deps.py
+# 默认端口8765
+python calculator_server.py
+
+# 自定义端口
+python calculator_server.py --port 9999 --host 0.0.0.0
 ```
 
-## 🔧 支持的功能
+### 3. 测试服务器
+```bash
+# 检查服务器状态
+curl http://localhost:8765/
 
-### 1. 基础计算 (`calculate`)
+# 获取工具列表
+curl http://localhost:8765/tools
 
-**支持的运算：**
-- 四则运算：`+`, `-`, `*`, `/`, `**`（幂）
-- 三角函数：`sin`, `cos`, `tan`, `asin`, `acos`, `atan`
-- 对数函数：`log`, `log10`, `ln`
-- 其他函数：`sqrt`, `abs`, `factorial`, `gcd`, `lcm`
-
-**输入格式：**
-```
-请计算 2 + 3 * 4
-请计算 sin(pi/4) + cos(pi/3)
-请计算 sqrt(16) + log(100)
-```
-
-### 2. 高级矩阵运算 (`matrix_advanced`)
-
-#### 基础矩阵运算
-- `add` - 矩阵加法
-- `subtract` - 矩阵减法
-- `multiply` - 矩阵乘法
-- `transpose` - 矩阵转置
-
-**输入格式：**
-```
-请计算矩阵 [[1,2],[3,4]] 和 [[5,6],[7,8]] 的加法
-请计算矩阵 [[1,2,3],[4,5,6]] 的转置
+# 基础计算
+curl -X POST http://localhost:8765/call_tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "basic_calculate",
+    "arguments": {
+      "expression": "2+3*4"
+    }
+  }'
 ```
 
-#### 矩阵性质
-- `determinant` - 行列式
-- `rank` - 矩阵秩
-- `trace` - 矩阵的迹
-- `norm` - 矩阵范数
-- `condition_number` - 条件数
+## 🛠️ MCP 工具说明
 
-**输入格式：**
-```
-请计算矩阵 [[1,2],[3,4]] 的行列式
-请计算矩阵 [[1,2,3],[4,5,6],[7,8,9]] 的秩
-```
+### 1. basic_calculate - 基础计算
+支持的运算：
+- 四则运算：`+`, `-`, `*`, `/`
+- 括号：`(`, `)`
+- 数学函数：`sin()`, `cos()`, `tan()`, `log()`, `ln()`, `sqrt()`, `abs()`, `exp()`
+- 常数：`pi`, `e`
 
-#### 矩阵分解
-- `eigenvalues` - 特征值
-- `eigenvectors` - 特征值和特征向量
-- `svd` - 奇异值分解
-- `lu_decomposition` - LU分解
-- `qr_decomposition` - QR分解
-- `cholesky` - Cholesky分解
-
-**输入格式：**
-```
-请计算矩阵 [[4,-2],[1,1]] 的特征值和特征向量
-请对矩阵 [[1,2,3],[4,5,6],[7,8,9]] 进行SVD分解
+**示例：**
+```json
+{
+  "tool_name": "basic_calculate",
+  "arguments": {
+    "expression": "sin(30) + sqrt(16) * pi"
+  }
+}
 ```
 
-#### 矩阵函数
-- `inverse` - 逆矩阵
-- `pseudo_inverse` - 伪逆矩阵
-- `matrix_power` - 矩阵幂
-- `matrix_exp` - 矩阵指数
-- `matrix_log` - 矩阵对数
+### 2. advanced_calculate - 高级计算
+支持的操作：
+- `factorial`: 阶乘计算
+- `power`: 幂运算
+- `root`: 开方运算
+- `percentage`: 百分比计算
+- `compound_interest`: 复利计算
 
-**输入格式：**
-```
-请计算矩阵 [[2,1],[1,1]] 的逆矩阵
-请计算矩阵 [[1,1],[1,0]] 的10次幂
-```
-
-#### 线性方程组
-- `solve_linear` - 线性方程组求解
-
-**输入格式：**
-```
-请解线性方程组：系数矩阵 [[2,1],[1,3]]，常数向量 [5,7]
+**示例：**
+```json
+{
+  "tool_name": "advanced_calculate",
+  "arguments": {
+    "operation": "factorial",
+    "n": 5
+  }
+}
 ```
 
-### 3. 微积分运算 (`calculus`)
+### 3. get_history - 获取历史
+获取计算历史记录
 
-#### 导数运算
-- `derivative` - 导数
-- `partial_derivative` - 偏导数
-- `numerical_derivative` - 数值导数
+### 4. clear_history - 清空历史
+清空所有计算历史
 
-**输入格式：**
-```
-请计算函数 x^3 + 2*x^2 + x + 1 的导数
-请计算函数 x^2 + y^2 + z^2 对 x 的偏导数
-请计算函数 x^4 + 3*x^3 + 2*x^2 + x 的3阶导数
-```
+### 5. memory_operation - 内存操作
+- `store`: 存储数值到内存
+- `recall`: 回忆内存中的数值
+- `add`: 将数值加到内存
+- `clear`: 清空内存
 
-#### 积分运算
-- `integral` - 不定积分
-- `definite_integral` - 定积分
-- `numerical_integral` - 数值积分
+## 🔧 在 AI Agent 中使用
 
-**输入格式：**
-```
-请计算函数 x^2 + 2*x + 1 的不定积分
-请计算定积分 ∫[0,2] x^2 dx
-请计算数值积分 ∫[0,π] sin(x) dx
-```
-
-#### 极限和级数
-- `limit` - 极限
-- `series_expansion` - 级数展开
-
-**输入格式：**
-```
-请计算极限 lim(x→0) sin(x)/x
-请将函数 exp(x) 在 x=0 处展开成5阶泰勒级数
+### HTTP 方式 (推荐)
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "url": "http://localhost:8765",
+      "type": "http"
+    }
+  }
+}
 ```
 
-#### 向量微积分
-- `gradient` - 梯度
-- `divergence` - 散度
-- `laplacian` - 拉普拉斯算子
-
-**输入格式：**
-```
-请计算函数 x^2 + y^2 的梯度
-请计算函数 x^2 + y^2 + z^2 的拉普拉斯算子
-```
-
-### 4. 复数运算 (`complex_numbers`)
-
-**支持的运算：**
-- `add` - 复数加法
-- `subtract` - 复数减法
-- `multiply` - 复数乘法
-- `divide` - 复数除法
-- `magnitude` - 复数模长
-- `phase` - 复数相位角
-- `conjugate` - 复数共轭
-
-**输入格式：**
-```
-请计算复数 (3+4i) 和 (1+2i) 的加法
-请计算复数 (3+4i) 的模长和相位角
-```
-
-### 5. 单位转换 (`unit_conversion`)
-
-**支持的单位类别：**
-- `length` - 长度：mm, cm, m, km, in, ft, yd, mile
-- `weight` - 重量：mg, g, kg, lb, oz, ton
-- `temperature` - 温度：C, F, K
-- `time` - 时间：ms, s, min, h, day, week, month, year
-- `area` - 面积：mm2, cm2, m2, km2, in2, ft2, acre
-- `volume` - 体积：ml, l, m3, gal, qt, pt, cup, fl_oz
-
-**输入格式：**
-```
-请将 100 厘米转换为米
-请将 32 华氏度转换为摄氏度
-请将 1 小时转换为秒
+### Stdio 方式
+```json
+{
+  "mcpServers": {
+    "calculator": {
+      "command": "python",
+      "args": ["/path/to/calculator_server.py"]
+    }
+  }
+}
 ```
 
 ## 📝 使用示例
 
-### 矩阵运算示例
-```
-用户：请计算矩阵 [[1,2],[3,4]] 的特征值和特征向量
+```python
+# 基础计算
+result = await mcp_client.call_tool("basic_calculate", {
+    "expression": "2 + 3 * 4"
+})
 
-系统：特征值:
-[5.37228132+0.j -0.37228132+0.j]
+# 高级计算 - 阶乘
+result = await mcp_client.call_tool("advanced_calculate", {
+    "operation": "factorial",
+    "n": 5
+})
 
-特征向量:
-[[-0.56576746 -0.90937671]
- [-0.82456484  0.41597356]]
-```
+# 复利计算
+result = await mcp_client.call_tool("advanced_calculate", {
+    "operation": "compound_interest",
+    "principal": 1000,
+    "rate": 0.05,
+    "time": 10,
+    "n": 12
+})
 
-### 微积分示例
-```
-用户：请计算函数 x^3 + 2*x^2 + x + 1 的导数
+# 内存操作
+await mcp_client.call_tool("memory_operation", {
+    "operation": "store",
+    "value": 42
+})
 
-系统：1阶导数 d^1/dx^1(x**3 + 2*x**2 + x + 1) = 3*x**2 + 4*x + 1
-```
-
-```
-用户：请计算定积分 ∫[0,2] x^2 dx
-
-系统：定积分 ∫[0→2] x**2 dx = 8/3
-```
-
-### 复数运算示例
-```
-用户：请计算复数 (3+4i) 的模长
-
-系统：复数 (3+4j) 的模长: 5.0
-```
-
-## 🔍 输入格式要求
-
-### 矩阵格式
-- 使用嵌套列表表示：`[[1,2],[3,4]]`
-- 支持整数和浮点数
-- 支持复数（自动处理）
-
-### 数学表达式格式
-- 使用标准数学符号：`+`, `-`, `*`, `/`, `**`
-- 函数名：`sin`, `cos`, `exp`, `log`, `sqrt` 等
-- 变量名：`x`, `y`, `z`, `t`
-- 常数：`pi`, `e`
-
-### 复数格式
-- 使用列表表示：`[实部, 虚部]`
-- 例如：`[3, 4]` 表示 3+4i
-
-## 🧪 测试
-
-运行测试脚本验证功能：
-```bash
-python test.py
+result = await mcp_client.call_tool("memory_operation", {
+    "operation": "recall"
+})
 ```
 
-## 📋 依赖库
+## 🧪 API 端点
 
-- **NumPy** - 数值计算
-- **SciPy** - 科学计算
-- **SymPy** - 符号数学
+- `GET /` - 服务器信息
+- `GET /mcp/info` - MCP 服务器信息
+- `GET /tools` - 获取工具列表
+- `POST /call_tool` - 调用工具
+- `GET /mcp-config-schema` - 配置模式
 
-## 🎯 适用场景
 
-- 📚 **学术研究** - 复杂数学计算
-- 🔬 **科学计算** - 数值分析和模拟
-- 📊 **数据分析** - 矩阵运算和统计
-- 🎓 **教育教学** - 数学概念演示
-- 🏭 **工程计算** - 技术计算需求
-
-## 🚀 版本信息
-
-- **版本**: 3.0.0
-- **服务器名称**: super-calculator-advanced
-- **协议版本**: 2024-11-05
-
-## 📞 支持
-
-如果遇到问题，请检查：
-1. 依赖库是否正确安装
-2. 输入格式是否符合要求
-3. MCP server 配置是否正确
-
----
-
-**享受强大的数学计算能力！** 🎉

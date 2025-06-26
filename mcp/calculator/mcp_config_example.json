@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "calculator": {
+            "command": "python",
+            "args": [
+                "/绝对路径/到/calculator_server.py",
+                "--port",
+                "8765",
+                "--host",
+                "0.0.0.0"
+            ]
+        }
+    }
+}

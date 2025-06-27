@@ -19,15 +19,15 @@ export default function HomePage() {
         <Link href="/chat/new">
           <div className="bg-[var(--color-card)] p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col items-center text-center">
             <MessageSquare size={48} className="text-[var(--color-primary)] mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">Chat</h2>
-            <p className="text-gray-600 dark:text-gray-300">Engage in a conversation with our general-purpose AI assistant.</p>
+            <h2 className="text-2xl font-semibold mb-2">多功能聊天</h2>
+            <p className="text-gray-600 dark:text-gray-300">与我们的通用AI助手进行对话</p>
           </div>
         </Link>
         <Link href="/agents/political-essay">
           <div className="bg-[var(--color-card)] p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col items-center text-center">
             <PenSquare size={48} className="text-[var(--color-primary)] mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">Political Science Essay Agent</h2>
-            <p className="text-gray-600 dark:text-gray-300">A specialized agent to assist with writing political science essays.</p>
+            <h2 className="text-2xl font-semibold mb-2">思政论文写作</h2>
+            <p className="text-gray-600 dark:text-gray-300">专门用于协助撰写思政论文的AI助手</p>
           </div>
         </Link>
       </div>

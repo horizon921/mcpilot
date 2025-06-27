@@ -1,5 +1,9 @@
 # ===== 通用忽略规则 =====
 
+# 部分markdown文件
+GEMINI.md
+GITHUB_SETUP.md
+
 # 操作系统生成的文件
 .DS_Store
 .DS_Store?
@@ -255,7 +259,3 @@ temp/
 # 保留必要的配置文件
 !frontend/.env.local.example
 !treehole_mcp_server/.env.example
-
-# 部分markdown文件
-GEMINI.md
-GITHUB_SETUP.md

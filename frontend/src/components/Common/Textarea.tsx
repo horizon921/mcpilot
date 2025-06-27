@@ -11,10 +11,10 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <textarea
         className={classNames(
-          "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-          // Custom classes for our specific MessageInput use case:
-          "resize-none overflow-y-auto max-h-40 min-h-[40px]", 
-          className
+          "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          "resize-none overflow-y-auto", // Custom classes for our specific MessageInput use case
+          className,
+          "flex-grow" // Add flex-grow when in flexible container
         )}
         ref={ref}
         {...props}

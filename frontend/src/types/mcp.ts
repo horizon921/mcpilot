@@ -47,6 +47,7 @@ export interface MCPServerInfo {
   name: string; // User-friendly name for the server
   description?: string;
   baseUrl: string; // Base URL of the MCP server
+  parameters?: Record<string, any>; // Server configuration parameters
   // Dynamic server configuration
   configSchema?: MCPConfigSchema; // Server's parameter schema
   config?: MCPServerConfig; // User's configured parameter values

@@ -62,23 +62,7 @@ class WebSearcher:
         try:
             session = await self.get_session()
 
-            # DuckDuckGo即时答案API
-            instant_answer_url = "https://api.duckduckgo.com/"
-            params = {
-                'q': query,
-                'format': 'json',
-                'no_html': '1',
-                'skip_disambig': '1'
-            }
-
-            async with session.get(instant_answer_url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    instant_answer = self._parse_duckduckgo_instant(data)
-                else:
-                    instant_answer = None
-
-            # DuckDuckGo HTML搜索
+            # 直接使用 HTML 搜索，跳过即时答案 API
             search_url = "https://html.duckduckgo.com/html/"
             data = {'q': query}
 
@@ -88,7 +72,7 @@ class WebSearcher:
                         "success": False,
                         "error": f"搜索请求失败: HTTP {response.status}",
                         "results": [],
-                        "instant_answer": instant_answer
+                        "instant_answer": None
                     }
 
                 html_content = await response.text()
@@ -100,7 +84,7 @@ class WebSearcher:
                     "query": query,
                     "engine": "DuckDuckGo",
                     "results": results,
-                    "instant_answer": instant_answer,
+                    "instant_answer": None,  # 暂时不获取即时答案
                     "timestamp": datetime.now().isoformat()
                 }
 
@@ -157,21 +141,53 @@ class WebSearcher:
             soup = BeautifulSoup(html_content, 'html.parser')
             results = []
 
-            # 查找搜索结果
+            # DuckDuckGo HTML 版本的结果选择器
             result_divs = soup.find_all('div', class_='result')
+
+            # 如果没找到，尝试其他可能的选择器
+            if not result_divs:
+                result_divs = soup.find_all('div', class_='web-result')
+
+            if not result_divs:
+                result_divs = soup.find_all('div', class_='results_links')
 
             for i, div in enumerate(result_divs[:max_results]):
                 try:
-                    # 标题和链接
+                    # 标题和链接 - 尝试多种选择器
                     title_link = div.find('a', class_='result__a')
+                    if not title_link:
+                        title_link = div.find('a', class_='result-link')
+                    if not title_link:
+                        title_link = div.find('h2').find(
+                            'a') if div.find('h2') else None
+                    if not title_link:
+                        title_link = div.find('a')
+
                     if not title_link:
                         continue
 
                     title = title_link.get_text(strip=True)
                     url = title_link.get('href', '')
 
-                    # 描述
+                    # 处理相对链接
+                    if url.startswith('/'):
+                        url = 'https://duckduckgo.com' + url
+
+                    # 描述 - 尝试多种选择器
                     snippet_div = div.find('a', class_='result__snippet')
+                    if not snippet_div:
+                        snippet_div = div.find('div', class_='result__snippet')
+                    if not snippet_div:
+                        snippet_div = div.find(
+                            'span', class_='result__snippet')
+                    if not snippet_div:
+                        # 查找任何包含描述文本的元素
+                        for elem in div.find_all(['p', 'span', 'div']):
+                            text = elem.get_text(strip=True)
+                            if len(text) > 20 and not elem.find('a'):  # 排除只包含链接的元素
+                                snippet_div = elem
+                                break
+
                     snippet = snippet_div.get_text(
                         strip=True) if snippet_div else ""
 
@@ -185,13 +201,13 @@ class WebSearcher:
                         })
 
                 except Exception as e:
-                    logger.warning(f"解析单个结果失败: {e}")
+                    logger.warning(f"解析DuckDuckGo结果失败: {e}")
                     continue
 
             return results
 
         except Exception as e:
-            logger.error(f"解析搜索结果失败: {e}")
+            logger.error(f"解析DuckDuckGo搜索结果失败: {e}")
             return []
 
     async def search_searxng(self, query: str, max_results: int = 10, instance: str = "https://search.bus-hit.me") -> Dict[str, Any]:

@@ -21,7 +21,15 @@ pip install -r requirements.txt
 
 ### 2. 配置认证信息
 
-需要设置以下环境变量（从浏览器开发者工具中获取）：
+📋 获取认证信息步骤
+打开北大树洞网站：访问 https://treehole.pku.edu.cn
+登录账号：使用北大账号登录
+打开开发者工具：按 F12 或 Command+Option+I
+切换到网络选项卡：点击 "Network"/"网络" 标签
+设置过滤器：在过滤框中输入 "api" 来过滤API请求
+刷新网站：按 F5 或点击刷新按钮
+查看请求：点击任意一个 API 请求（如 bookmark 相关请求）
+复制认证信息：在请求头（Request Headers）中找到以下信息
 
 ```bash
 export PKU_AUTHORIZATION="Bearer your_token_here"

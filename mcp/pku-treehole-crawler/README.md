@@ -235,6 +235,3 @@ posts = await mcp_client.call_tool("get_followed_posts", {
 
 欢迎提交 Issue 和 Pull Request！
 
-## 许可证
-
-MIT License

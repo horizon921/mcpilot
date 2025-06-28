@@ -50,7 +50,7 @@ mcpilot/
 - **主题**：next-themes
 - **AI SDK**：
   - @anthropic-ai/sdk (Claude)
-  - openai (OpenAI GPT)
+  - @openai (OpenAI GPT)
   - @google/generative-ai (Gemini)
 
 ### 后端技术栈

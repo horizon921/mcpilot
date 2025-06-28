@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { MessageSquare, PenSquare, Settings } from 'lucide-react';
+import { MessageSquare, PenSquare, Settings, Calculator, MessageCircle } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -28,6 +28,20 @@ export default function HomePage() {
             <PenSquare size={48} className="text-[var(--color-primary)] mb-4" />
             <h2 className="text-2xl font-semibold mb-2">思政论文写作</h2>
             <p className="text-gray-600 dark:text-gray-300">专门用于协助撰写思政论文的AI助手</p>
+          </div>
+        </Link>
+        <Link href="/agents/math-assistant">
+          <div className="bg-[var(--color-card)] p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col items-center text-center">
+            <Calculator size={48} className="text-[var(--color-primary)] mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">数学学习辅助</h2>
+            <p className="text-gray-600 dark:text-gray-300">高等数学与线性代数问题解答</p>
+          </div>
+        </Link>
+        <Link href="/agents/treehole-assistant">
+          <div className="bg-[var(--color-card)] p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col items-center text-center">
+            <MessageCircle size={48} className="text-[var(--color-primary)] mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">树洞信息助手</h2>
+            <p className="text-gray-600 dark:text-gray-300">获取并分析北大树洞信息</p>
           </div>
         </Link>
       </div>

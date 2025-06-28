@@ -15,7 +15,7 @@ if ! command -v python &> /dev/null && ! command -v python3 &> /dev/null; then
 fi
 
 echo "📦 安装前端依赖..."
-cd frontend && npm install
+cd client && npm install
 
 echo "📦 安装MCP服务器依赖..."
 cd ../treehole_mcp_server && pip install -r requirements.txt
@@ -29,7 +29,7 @@ MCP_PID=$!
 
 # 启动前端
 echo "启动前端服务器 (端口3002)..."
-cd ../frontend && npm run dev &
+cd ../client && npm run dev &
 FRONTEND_PID=$!
 
 echo ""

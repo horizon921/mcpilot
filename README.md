@@ -1,6 +1,6 @@
 # MCPilot - AI 助手与 MCP 服务器集成平台
 
-MCPilot 是一个现代化的、功能完备的 AI 助手应用，支持 MCP (Model Context Protocol) 协议，可以集成多种 AI 模型和自定义工具服务器。项目包含一个基于 Next.js 的前端界面和多个独立的 MCP 服务器，包括一个专门的北大树洞内容爬取工具。
+MCPilot 是一个现代化的、功能完备的 AI 助手应用，支持 MCP (Model Context Protocol) 协议，可以集成多种 AI 模型和自定义工具服务器。项目包含一个基于 Next.js 的客户端应用和多个独立的 MCP 服务器，包括一个专门的北大树洞内容爬取工具。
 ## 🚀 项目特性
 
 - **多模态输入**：支持文本和图片同时输入，实现了真正的多模态交互。
@@ -23,7 +23,7 @@ MCPilot 是一个现代化的、功能完备的 AI 助手应用，支持 MCP (Mo
 
 ```
 mcpilot/
-├── frontend/                    # Next.js 前端应用
+├── client/                      # Next.js 客户端应用
 │   ├── src/                     # 源代码目录
 │   │   ├── app/                 # Next.js App Router
 │   │   ├── components/          # React 组件
@@ -40,7 +40,7 @@ mcpilot/
 
 ## 🛠️ 技术栈
 
-### 前端技术栈
+### 客户端技术栈
 - **框架**：Next.js 14 (App Router)
 - **语言**：TypeScript
 - **样式**：Tailwind CSS
@@ -106,7 +106,7 @@ python server.py
 打开新的终端窗口：
 
 ```bash
-cd frontend
+cd client
 npm install
 npm run dev
 ```
@@ -170,7 +170,7 @@ npm run dev
 名称：北大树洞爬虫
 基础URL：http://localhost:8765
 认证方式：北大树洞认证
-PKU Authorization：Bearer your_authorization_token
+PKU Authorization：Bearer <YOUR_PKU_AUTHORIZATION_TOKEN>
 PKU Cookie：your_cookie_string
 PKU UUID：your_uuid
 PKU XSRF Token：your_xsrf_token
@@ -201,9 +201,9 @@ PKU XSRF Token：your_xsrf_token
 
 ## 🔧 部署指南
 
-### 生产部署
+#### 客户端部署
 ```bash
-cd frontend
+cd client
 npm install
 npm run build
 ```
@@ -224,7 +224,7 @@ python server.py
 可以为每个服务创建独立的Docker容器：
 
 ```dockerfile
-# frontend/Dockerfile
+# client/Dockerfile
 FROM node:18-alpine
 WORKDIR /app
 COPY package*.json ./
@@ -255,10 +255,10 @@ CMD ["python", "server.py"]
 3. 实现MCP协议标准的API接口
 4. 在前端设置中添加服务器配置
 
-### 前端开发
+### 客户端开发
 
 ```bash
-cd frontend
+cd client
 npm run dev      # 开发模式
 npm run build    # 构建生产版本
 npm run start    # 启动生产服务器

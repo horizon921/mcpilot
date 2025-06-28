@@ -34,7 +34,7 @@ Thumbs.db
 # ===== Node.js / Frontend =====
 
 # 依赖
-frontend/node_modules/
+client/node_modules/
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -42,34 +42,34 @@ yarn-error.log*
 pnpm-debug.log*
 
 # 构建输出
-frontend/.next/
-frontend/out/
-frontend/build/
-frontend/dist/
+client/.next/
+client/out/
+client/build/
+client/dist/
 
 # Runtime data
-frontend/pids
-frontend/*.pid
-frontend/*.seed
-frontend/*.pid.lock
+client/pids
+client/*.pid
+client/*.seed
+client/*.pid.lock
 
 # Coverage directory used by tools like istanbul
-frontend/coverage/
-frontend/.nyc_output
+client/coverage/
+client/.nyc_output
 
 # 环境变量文件（包含敏感信息）
-frontend/.env
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+client/.env
+client/.env.local
+client/.env.development.local
+client/.env.test.local
+client/.env.production.local
 
 # Vercel
-frontend/.vercel
+client/.vercel
 
 # Next.js
-frontend/.next/
-frontend/out/
+client/.next/
+client/out/
 
 # ===== Python / Backend =====
 

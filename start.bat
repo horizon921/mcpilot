@@ -18,7 +18,7 @@ if %errorlevel% neq 0 (
 )
 
 echo 📦 安装前端依赖...
-cd frontend
+cd client
 call npm install
 if %errorlevel% neq 0 (
     echo ❌ 前端依赖安装失败
@@ -46,7 +46,7 @@ timeout /t 2 /nobreak >nul
 
 :: 启动前端
 echo 启动前端服务器 ^(端口3002^)...
-cd ..\frontend
+cd ..\client
 start "Frontend" cmd /c "npm run dev"
 
 echo.

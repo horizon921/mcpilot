@@ -32,11 +32,25 @@ export interface MCPToolCallStatus {
   timestamp: Date;
 }
 
+export type ContentPart = TextContentPart | ImageContentPart;
+
+export interface TextContentPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ImageContentPart {
+  type: 'image';
+  // Use a Data URL for the image source
+  src: string;
+  // Optional: specify the media type if known (e.g., 'image/jpeg', 'image/png')
+  mediaType?: string;
+}
 export interface Message {
   id: string;
   chatId: string;
   role: MessageRole;
-  content: string | null; // Null if there are tool_calls
+  content: string | Array<ContentPart> | null;
   createdAt: Date;
   updatedAt?: Date;
   user?: UserProfile; // Optional, for displaying user info if needed
@@ -81,7 +95,7 @@ export interface ChatSession {
 export interface CreateMessagePayload {
   chatId: string;
   role: MessageRole;
-  content: string;
+  content: string | Array<ContentPart> | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }

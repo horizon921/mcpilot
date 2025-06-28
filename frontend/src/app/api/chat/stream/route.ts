@@ -4,7 +4,8 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, Content } from '@google/generative-ai'; // Import Gemini SDK
 import Ajv, { ValidationError } from "ajv";
-import type { Message as ChatMessage, MessageRole } from '@/types/chat';
+import addFormats from "ajv-formats";
+import type { Message as ChatMessage, MessageRole, ContentPart } from '@/types/chat';
 import type { ChatStreamChunk, StreamError } from '@/types/api';
 import type { AIProviderType } from '@/types/config'; // Import AIProviderType
 import type { MCPServerInfo, MCPToolDefinition, MCPCallApiRequest, MCPCallApiResponse } from '@/types/mcp';
@@ -157,6 +158,36 @@ function detectMediumRiskPatterns(content: string): boolean {
   ];
 
   return mediumRiskPatterns.some(pattern => pattern.test(content));
+}
+
+
+function extractJsonFromMarkdown(text: string): string | null {
+  // 1. Look for a JSON block within ```json ... ```
+  const jsonMarkdownRegex = /```json\n([\s\S]*?)\n```/;
+  const match = text.match(jsonMarkdownRegex);
+
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+
+  // 2. If not found, look for the first occurrence of `{` and the last occurrence of `}`
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const potentialJson = text.substring(firstBrace, lastBrace + 1);
+    try {
+      // Try to parse to see if it's valid JSON
+      JSON.parse(potentialJson);
+      return potentialJson.trim();
+    } catch (e) {
+      // It's not valid JSON, so we can't be sure
+      console.warn("Could not extract valid JSON from text between first and last braces.");
+    }
+  }
+
+  // 3. If all else fails, return null
+  return null;
 }
 
 
@@ -355,11 +386,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Model Native ID is required' }, { status: 400 });
     }
 
+    if (jsonSchema) {
+      const schemaInstruction = `\n\nPlease provide a response in JSON format that strictly adheres to the following JSON Schema. Do not include any other text or explanations outside of the JSON object. The schema is as follows:\n\n${JSON.stringify(jsonSchema, null, 2)}`;
+      systemPrompt = systemPrompt ? `${systemPrompt}\n${schemaInstruction}` : schemaInstruction;
+    }
+
     // Apply preprocessing if enabled
     if (enableInputPreprocessing) {
       messages = messages.map(msg => {
         if (msg.role === 'user' && msg.content) {
-          return { ...msg, content: preprocessInput(msg.content) };
+          if (typeof msg.content === 'string') {
+            return { ...msg, content: preprocessInput(msg.content) };
+          } else if (Array.isArray(msg.content)) {
+            const processedContent = msg.content.map(part => {
+              if (part.type === 'text') {
+                return { ...part, text: preprocessInput(part.text) };
+              }
+              return part;
+            });
+            return { ...msg, content: processedContent };
+          }
         }
         return msg;
       });
@@ -493,15 +539,35 @@ export async function POST(request: NextRequest) {
       messages.forEach(msg => {
         if (msg.content || (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) || msg.role === 'tool') {
           const mappedRole = mapRoleToOpenAI(msg.role);
-          if (mappedRole === 'system') { if (msg.content) openAIMessages.push({ role: 'system', content: msg.content }); }
-          else if (mappedRole === 'user') { if (msg.content) openAIMessages.push({ role: 'user', content: msg.content }); }
-          else if (mappedRole === 'assistant') {
+          if (mappedRole === 'system') { 
+            if (typeof msg.content === 'string') openAIMessages.push({ role: 'system', content: msg.content });
+          } else if (mappedRole === 'user') {
+            if (typeof msg.content === 'string') {
+              openAIMessages.push({ role: 'user', content: msg.content });
+            } else if (Array.isArray(msg.content)) {
+              const contentParts: Array<OpenAI.Chat.ChatCompletionContentPart> = msg.content.map(part => {
+                if (part.type === 'text') {
+                  return { type: 'text', text: part.text };
+                } else if (part.type === 'image') {
+                  return { type: 'image_url', image_url: { url: part.src } };
+                }
+                // Fallback for unknown parts, though ideally this shouldn't be reached with proper typing
+                return { type: 'text', text: '[unsupported content type]' };
+              });
+              openAIMessages.push({ role: 'user', content: contentParts });
+            }
+          } else if (mappedRole === 'assistant') {
             if (msg.tool_calls && msg.tool_calls.length > 0) {
               openAIMessages.push({ role: 'assistant', content: msg.content || null, tool_calls: msg.tool_calls.map(tc => ({ id: tc.id, type: tc.type, function: { name: tc.function.name, arguments: tc.function.arguments } })) });
-            } else { if (msg.content) openAIMessages.push({ role: 'assistant', content: msg.content }); }
+            } else { 
+              if (typeof msg.content === 'string') openAIMessages.push({ role: 'assistant', content: msg.content });
+            }
           } else if (mappedRole === 'tool') {
-            if (msg.tool_call_id && msg.content) { openAIMessages.push({ role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id }); }
-            else { console.warn("Tool message missing tool_call_id or content, skipping:", msg); }
+            if (msg.tool_call_id && typeof msg.content === 'string') { 
+              openAIMessages.push({ role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id }); 
+            } else { 
+              console.warn("Tool message missing tool_call_id or content is not a string, skipping:", msg); 
+            }
           }
         }
       });
@@ -551,14 +617,12 @@ export async function POST(request: NextRequest) {
                 }
                 // Check if this chunk signals the end of the turn (e.g. for tool calls)
                 if (choice?.finish_reason === 'tool_calls') {
-                  // Send accumulated tool calls if any
-                  if (accumulatedToolCalls.length > 0) {
                     send({
                       id: assistantMsgId,
-                      type: 'tool_calls', // New chunk type
+                      type: 'tool_calls',
                       tool_calls: accumulatedToolCalls.map(tc => ({
-                        id: tc.id!, // id should be present by now
-                        type: tc.type!, // type should be 'function'
+                        id: tc.id!,
+                        type: tc.type!,
                         function: {
                           name: tc.function!.name!,
                           arguments: tc.function!.arguments!,
@@ -566,13 +630,9 @@ export async function POST(request: NextRequest) {
                       }))
                     });
 
-                    // 收集工具调用结果，准备发送给AI获取最终响应
                     const toolMessages = [];
-
-                    // 处理MCP工具调用
                     for (const toolCall of accumulatedToolCalls) {
                       try {
-                        // 发送工具调用开始状态
                         const serverIdFromTool = toolCall.function!.name!.split('_')[0];
                         const actualServer = mcpServers.find(s => s.id === serverIdFromTool || s.id.replace(/[^a-zA-Z0-9_.-]/g, '_') === serverIdFromTool);
 
@@ -584,14 +644,12 @@ export async function POST(request: NextRequest) {
                           server_name: actualServer?.name || serverIdFromTool
                         });
 
-                        // 调用MCP工具
                         const toolResult = await callMCPTool(
                           toolCall.function!.name!,
                           toolCall.function!.arguments!,
                           mcpServers
                         );
 
-                        // 发送工具调用结果
                         send({
                           id: `tool-${toolCall.id}`,
                           type: 'tool_call_result',
@@ -599,7 +657,6 @@ export async function POST(request: NextRequest) {
                           result: toolResult
                         });
 
-                        // 添加到工具消息数组
                         toolMessages.push({
                           role: 'tool' as const,
                           tool_call_id: toolCall.id!,
@@ -608,7 +665,6 @@ export async function POST(request: NextRequest) {
 
                       } catch (error: any) {
                         console.error('MCP工具调用失败:', error);
-                        // 发送工具调用错误
                         send({
                           id: `tool-${toolCall.id}`,
                           type: 'tool_call_error',
@@ -616,7 +672,6 @@ export async function POST(request: NextRequest) {
                           error: error.message || '工具调用失败'
                         });
 
-                        // 添加错误消息到工具消息数组
                         toolMessages.push({
                           role: 'tool' as const,
                           tool_call_id: toolCall.id!,
@@ -625,12 +680,8 @@ export async function POST(request: NextRequest) {
                       }
                     }
 
-                    // 结束第一个消息（包含工具调用的AI消息）
-                    send({ id: assistantMsgId, type: 'message_end' });
+                    send({ id: assistantMsgId, type: 'thinking', thinking: true });
 
-                    console.log('工具调用完成，准备重新请求AI获取最终响应');
-
-                    // 构建包含工具结果的消息历史
                     const messagesWithToolResults = [
                       ...openAIMessages,
                       {
@@ -641,13 +692,6 @@ export async function POST(request: NextRequest) {
                       ...toolMessages
                     ];
 
-                    // 开始新的AI响应消息
-                    const finalAssistantMsgId = `ai-final-${Date.now()}`;
-                    send({ id: finalAssistantMsgId, type: 'message_start', message: { id: finalAssistantMsgId, role: 'assistant', chatId, createdAt: new Date().toISOString() } });
-                    let finalAccumulatedContent = "";
-
-                    // 重新调用AI获取最终响应 - 流式模式
-                    console.log('准备发送给AI的消息历史:', JSON.stringify(messagesWithToolResults, null, 2));
                     const finalStream = await currentOpenAIClient.chat.completions.create({
                       model: modelNativeId,
                       messages: messagesWithToolResults,
@@ -659,72 +703,59 @@ export async function POST(request: NextRequest) {
                       response_format: jsonSchema ? { type: "json_object" } : undefined,
                     });
 
-                    // 处理最终响应的流式输出
                     for await (const finalChunk of finalStream) {
                       const finalChoice = finalChunk.choices[0];
                       if (finalChoice?.delta?.content) {
-                        finalAccumulatedContent += finalChoice.delta.content;
-                        send({ id: finalAssistantMsgId, type: 'content_delta', role: 'assistant', content: finalChoice.delta.content });
+                        send({ id: assistantMsgId, type: 'content_delta', role: 'assistant', content: finalChoice.delta.content });
                       }
 
                       if (finalChoice?.finish_reason === 'stop') {
-                        console.log('AI最终响应完成');
                         break;
                       }
                     }
 
-                    // 结束最终响应消息
-                    send({ id: finalAssistantMsgId, type: 'message_end' });
-
-                    accumulatedToolCalls = []; // Reset for safety
-                  }
-                } else if (choice?.finish_reason === 'stop') {
+                    send({ id: assistantMsgId, type: 'thinking', thinking: false });
+                    accumulatedToolCalls = [];
+                  } else if (choice?.finish_reason === 'stop') {
                   if (jsonSchema && accumulatedContent.trim()) {
-                    try {
-                      console.log("准备验证JSON Schema:");
-                      console.log("- Content length:", accumulatedContent.length);
-                      console.log("- Content preview:", accumulatedContent.substring(0, 100) + "...");
-
-                      const parsedContent = JSON.parse(accumulatedContent.trim());
-                      console.log("- Parsed content type:", typeof parsedContent);
-                      let schemaToValidate = jsonSchema;
-                      if (jsonSchema.response_format?.json_schema?.schema) {
-                        schemaToValidate = jsonSchema.response_format.json_schema.schema;
-                      } else if (jsonSchema.json_schema?.schema) {
-                        schemaToValidate = jsonSchema.json_schema.schema;
-                      } else if (jsonSchema.schema) {
-                        schemaToValidate = jsonSchema.schema;
-                      }
-                      console.log("- Schema to validate:", JSON.stringify(schemaToValidate, null, 2));
-
-                      const ajv = new Ajv({ allErrors: true });
-                      const validate = ajv.compile(schemaToValidate);
-                      const isValid = validate(parsedContent);
-
-                      if (!isValid) {
-                        console.error("JSON Schema validation failed:", validate.errors);
-                        send({
-                          id: assistantMsgId,
-                          type: 'error',
-                          error: {
-                            message: "模型输出不符合自定义的JSON Schema。",
-                            details: `验证错误: ${ajv.errorsText(validate.errors)}`,
-                          }
-                        });
-                      } else {
-                        console.log("JSON Schema validation passed");
-                      }
-                    } catch (parseError) {
-                      console.error("Failed to parse JSON content:", parseError);
-                      console.error("Content that failed to parse:", accumulatedContent.substring(0, 200) + "...");
+                    const extractedJson = extractJsonFromMarkdown(accumulatedContent);
+                    if (!extractedJson) {
                       send({
                         id: assistantMsgId,
                         type: 'error',
                         error: {
-                          message: "无法解析模型输出为JSON，或验证时发生错误。",
-                          details: parseError instanceof Error ? parseError.message : String(parseError),
+                          message: "模型输出中未找到有效的JSON内容。",
+                          details: `模型原始输出 (前200字符): ${accumulatedContent.substring(0, 200)}...`,
                         }
                       });
+                    } else {
+                      try {
+                        const parsedContent = JSON.parse(extractedJson);
+                        const ajv = new Ajv({ allErrors: true });
+                        addFormats(ajv);
+                        const validate = ajv.compile(jsonSchema);
+                        const isValid = validate(parsedContent);
+
+                        if (!isValid) {
+                          send({
+                            id: assistantMsgId,
+                            type: 'error',
+                            error: {
+                              message: "模型输出不符合自定义的JSON Schema。",
+                              details: ajv.errorsText(validate.errors),
+                            }
+                          });
+                        }
+                      } catch (parseError) {
+                        send({
+                          id: assistantMsgId,
+                          type: 'error',
+                          error: {
+                            message: "无法解析提取出的JSON内容，或验证时发生错误。",
+                            details: parseError instanceof Error ? parseError.message : String(parseError),
+                          }
+                        });
+                      }
                     }
                   }
                 }
@@ -904,7 +935,30 @@ export async function POST(request: NextRequest) {
       const anthropic = new Anthropic({ apiKey: apiKeyToUse, baseURL: baseUrl });
       const anthropicMessages: Anthropic.Messages.MessageParam[] = messages
         .filter(msg => msg.role === 'user' || msg.role === 'assistant') // Anthropic only accepts user/assistant roles in messages array
-        .map(msg => ({ role: mapRoleToAnthropic(msg.role), content: msg.content || "" }));
+        .map(msg => {
+          const content: Anthropic.Messages.MessageParam['content'] = [];
+          if (typeof msg.content === 'string') {
+            content.push({ type: 'text', text: msg.content });
+          } else if (Array.isArray(msg.content)) {
+            msg.content.forEach(part => {
+              if (part.type === 'text') {
+                content.push({ type: 'text', text: part.text });
+              } else if (part.type === 'image' && part.src.startsWith('data:')) {
+                const [header, base64Data] = part.src.split(',');
+                const mediaType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                content.push({
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType as Anthropic.Messages.ImageBlockSource['media_type'],
+                    data: base64Data,
+                  },
+                });
+              }
+            });
+          }
+          return { role: mapRoleToAnthropic(msg.role), content };
+        });
 
       // Ensure messages are not empty and handle system prompt
       if (anthropicMessages.length === 0) {
@@ -969,7 +1023,23 @@ export async function POST(request: NextRequest) {
             console.warn(`Gemini: Skipping consecutive message with role ${currentRole} to maintain alternation.`);
             return;
           }
-          geminiHistory.push({ role: currentRole, parts: [{ text: msg.content }] });
+
+          const parts: any[] = [];
+          if (typeof msg.content === 'string') {
+            parts.push({ text: msg.content });
+          } else if (Array.isArray(msg.content)) {
+            msg.content.forEach(part => {
+              if (part.type === 'text') {
+                parts.push({ text: part.text });
+              } else if (part.type === 'image' && part.src.startsWith('data:')) {
+                const [header, base64Data] = part.src.split(',');
+                const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                parts.push({ inlineData: { mimeType, data: base64Data } });
+              }
+            });
+          }
+
+          geminiHistory.push({ role: currentRole, parts });
         }
       });
 

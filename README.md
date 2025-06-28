@@ -1,17 +1,16 @@
-# MCPilot - AI助手与MCP服务器集成平台
+# MCPilot - AI 助手与 MCP 服务器集成平台
 
-MCPilot是一个现代化的AI助手应用，支持MCP (Model Context Protocol) 协议，可以集成多种AI模型和自定义工具服务器。项目包含一个基于Next.js的前端界面和多个专业的MCP服务器。
-
+MCPilot 是一个现代化的、功能完备的 AI 助手应用，支持 MCP (Model Context Protocol) 协议，可以集成多种 AI 模型和自定义工具服务器。项目包含一个基于 Next.js 的前端界面和多个独立的 MCP 服务器，包括一个专门的北大树洞内容爬取工具。
 ## 🚀 项目特性
 
-### 前端特性
-- **多AI模型支持**：集成OpenAI、Anthropic Claude、Google Gemini等主流AI模型
-- **MCP协议支持**：可连接和使用符合MCP标准的外部工具服务器
-- **现代化UI**：基于Next.js 14和Tailwind CSS的响应式界面
-- **实时聊天**：支持流式响应的聊天体验
-- **会话管理**：支持多会话管理和会话设置
-- **主题切换**：支持明暗主题切换
-- **状态持久化**：基于Zustand的状态管理和持久化
+- **多模态输入**：支持文本和图片同时输入，实现了真正的多模态交互。
+- **高级 JSON 结构化输出**：支持根据用户提供的 JSON Schema 强制模型输出结构化数据，并内置了对 `email` 等标准格式的校验。
+- **增强的流式响应**：优化了流式输出，能够正确处理模型的“思考”过程，避免了重复消息框的出现，提升了用户体验。
+- **多 AI 模型支持**：无缝集成 OpenAI、Anthropic Claude、Google Gemini 等多种主流及自定义的 AI 模型。
+- **MCP 协议支持**：可连接和使用符合 MCP 标准的外部工具服务器，实现了强大的可扩展性。
+- **现代化 UI**：基于 Next.js 14 和 Tailwind CSS 的响应式界面，支持明暗主题切换。
+- **会话管理**：支持多会话管理、会话设置以及消息的创建、编辑、删除和分支功能。
+- **状态持久化**：基于 Zustand 的状态管理和持久化，确保用户设置和聊天记录不会丢失。
 
 ### MCP服务器特性
 - **计算器服务**：数学计算和公式求解
@@ -23,23 +22,20 @@ MCPilot是一个现代化的AI助手应用，支持MCP (Model Context Protocol) 
 ## 📁 项目结构
 
 ```
-MCPilot/
-├── frontend/                 # Next.js 前端应用
-│   ├── src/
-│   │   ├── app/             # App Router 页面
-│   │   ├── components/      # 可复用组件
-│   │   ├── lib/            # 工具函数
-│   │   ├── store/          # Zustand 状态管理
-│   │   ├── styles/         # 全局样式
-│   │   └── types/          # TypeScript 类型定义
-│   └── package.json
-├── mcp/                     # MCP 服务器集合
-│   ├── calculator/          # 数学计算服务
-│   ├── python_interpreter/  # Python 代码执行
-│   ├── web_search/         # 网络搜索功能
-│   └── pku-treehole-crawler/ # 北大树洞爬虫
-├── agents/                  # Agent 配置
-└── docs/                   # 项目文档
+mcpilot/
+├── frontend/                    # Next.js 前端应用
+│   ├── src/                     # 源代码目录
+│   │   ├── app/                 # Next.js App Router
+│   │   ├── components/          # React 组件
+│   │   ├── store/               # Zustand 状态管理
+│   │   └── types/               # TypeScript 类型定义
+│   └── ...
+├── mcp/                         # MCP 服务器集合
+│   ├── calculator/              # 计算器 MCP 服务器
+│   ├── pku-treehole-crawler/    # 北大树洞爬虫 MCP 服务器
+│   ├── python_interpreter/      # Python 解释器 MCP 服务器
+│   └── web_search/              # 网络搜索 MCP 服务器
+└── README.md                    # 项目主文档
 ```
 
 ## 🛠️ 技术栈
@@ -105,7 +101,7 @@ python server.py
 
 > 💡 **提示**: 可以根据需要选择启动部分服务器，不需要全部启动。
 
-### 2. 启动前端应用
+### 2. 启动主应用
 
 打开新的终端窗口：
 
@@ -114,6 +110,7 @@ cd frontend
 npm install
 npm run dev
 ```
+（注意此时为nodejs为开发状态，若要投入生产实际或进行完整测试，请使用`npm run build`）
 
 ### 3. 访问应用
 
@@ -129,7 +126,7 @@ npm run dev
    - **OpenAI**：需要API密钥
    - **Anthropic**：需要API密钥
    - **Google Gemini**：需要API密钥
-4. 在"模型"页面添加具体的AI模型
+4. 在"模型管理"页面添加具体的AI模型
 
 ### 2. 配置MCP服务器
 
@@ -143,75 +140,41 @@ npm run dev
    - **默认启用**：是否在添加后默认启用该服务器
 
 #### 配置认证信息
-根据MCP服务器的要求，选择相应的认证方式：
-
-**无认证**
-- 适用于不需要认证的本地服务器
-
-**Bearer Token认证**
-- 输入Bearer Token
-- 适用于使用Authorization: Bearer <token>的API
-
-**API Key认证**
-- **API Key (Header)**：API Key通过HTTP请求头传递
-- **API Key (Query)**：API Key通过URL查询参数传递
-
-**基础认证**
-- 输入用户名和密码
-- 适用于HTTP Basic Authentication
-
-**自定义请求头**
-- 输入JSON格式的自定义请求头对象
-- 适用于需要特殊请求头配置的服务器
+根据MCP服务器的要求，填写相应的配置信息和认证信息
 
 #### 示例配置
 
 **本地计算器服务器**
 ```
 名称：计算器
-基础URL：http://localhost:8001
-认证方式：无认证
+默认基础URL：http://localhost:8765
+配置信息：无
 ```
 
 **本地Python解释器**
 ```
 名称：Python解释器
-基础URL：http://localhost:8002
-认证方式：无认证
+默认基础URL：http://localhost:8766
+配置信息：无
 ```
 
 **网络搜索服务**
 ```
 名称：网络搜索
-基础URL：http://localhost:8003
-认证方式：无认证
+默认基础URL：http://localhost:8767
+配置信息：无
 ```
 
 **北大树洞爬虫服务器**
 ```
 名称：北大树洞爬虫
-基础URL：http://localhost:8004
+基础URL：http://localhost:8765
 认证方式：北大树洞认证
 PKU Authorization：Bearer your_authorization_token
 PKU Cookie：your_cookie_string
 PKU UUID：your_uuid
 PKU XSRF Token：your_xsrf_token
 ```
-
-### 3. 环境变量配置
-
-#### 前端环境变量 (.env.local)
-```bash
-# AI API密钥 (可选，也可通过UI配置)
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-#### API密钥获取
-- **OpenAI**：https://platform.openai.com/api-keys
-- **Anthropic**：https://console.anthropic.com/
-- **Google Gemini**：https://makersuite.google.com/app/apikey
 
 ## 📖 使用指南
 
@@ -239,16 +202,14 @@ GEMINI_API_KEY=your_gemini_api_key
 ## 🔧 部署指南
 
 ### 生产部署
-
-#### 前端部署
 ```bash
 cd frontend
+npm install
 npm run build
-npm start
 ```
 
 #### MCP服务器部署
-每个MCP服务器都需要独立部署：
+每个MCP服务器都需要独立部署
 
 ```bash
 # 部署计算器服务
@@ -318,14 +279,6 @@ npm run lint     # 代码检查
 - Anthropic、OpenAI、Google 提供的AI服务
 - MCP协议标准制定者
 - 开源社区的各种优秀组件和工具
-
-## 📞 联系方式
-
-如有问题或建议，请通过以下方式联系：
-
-- 创建 GitHub Issue
-- 发送邮件到项目维护者
-- 加入开发者讨论群
 
 ---
 

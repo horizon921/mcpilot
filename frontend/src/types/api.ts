@@ -41,7 +41,16 @@ export interface StreamError {
 }
 
 // For streaming chat responses
-export interface ChatStreamChunk {
+export type ChatStreamChunk = 
+  | { type: 'message_start', message: { id: string, role: string, chatId: string, createdAt: string } }
+  | { type: 'content_delta', content: string, role: string }
+  | { type: 'message_end' }
+  | { type: 'tool_calls', tool_calls: any[] }
+  | { type: 'tool_call_start', tool_call_id: string, tool_name: string, server_name: string }
+  | { type: 'tool_call_result', tool_call_id: string, result: any }
+  | { type: 'tool_call_error', tool_call_id: string, error: any }
+  | { type: 'thinking', thinking: boolean }
+  | { type: 'error', error: StreamError };
   id: string; // Message ID or chunk ID
   type: "content_delta" | "tool_call_delta" | "tool_calls" | "tool_result" | "message_start" | "message_end" | "error" | "info" | "tool_call_start" | "tool_call_result" | "tool_call_error";
   // For content_delta

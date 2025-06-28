@@ -9,7 +9,7 @@ import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUIStore } from '@/store/uiStore'; // Import useUIStore
 import { Button } from '@/components/Common/Button'; // Import Button component
-import type { Message as MessageType } from '@/types/chat'; // Renamed to avoid conflict with React's Message type
+import type { Message as MessageType, ContentPart } from '@/types/chat'; // Renamed to avoid conflict with React's Message type
 import { toast } from "sonner"; // For copy feedback
 import { v4 as uuidv4 } from 'uuid';
 import { ArrowLeft, Settings } from 'lucide-react'; // Import Settings icon for the new button
@@ -147,8 +147,50 @@ export default function ChatPage() {
         toast.info("请输入消息或添加附件。");
         return; // Don't send empty messages
       }
+
+      // Handle attachments by converting them to Base64
+      const contentParts: ContentPart[] = [];
+      if (content.trim()) {
+        contentParts.push({ type: 'text', text: content.trim() });
+      }
+
+      if (attachments && attachments.length > 0) {
+        const imagePromises = attachments
+          .filter(file => file.type.startsWith('image/'))
+          .map(file => {
+            return new Promise<ContentPart>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                resolve({
+                  type: 'image',
+                  src: e.target?.result as string,
+                  mediaType: file.type,
+                });
+              };
+              reader.onerror = (err) => {
+                console.error("Failed to read file:", err);
+                reject(new Error("Failed to read file: " + file.name));
+              };
+              reader.readAsDataURL(file);
+            });
+          });
+
+        try {
+          const imageParts = await Promise.all(imagePromises);
+          contentParts.push(...imageParts);
+        } catch (error) {
+          toast.error("无法读取图片附件，请重试。");
+          return;
+        }
+      }
+      
+      const messageContent = contentParts.length === 1 && contentParts[0].type === 'text'
+      ? contentParts[0].text
+      : contentParts;
+
+
       // Add the new user message optimistically.
-      tempMessageId = chatStore.addOptimisticMessage(currentActiveChatId, content, "user", TEMP_USER_PROFILE);
+      tempMessageId = chatStore.addOptimisticMessage(currentActiveChatId, messageContent, "user", TEMP_USER_PROFILE);
       // Get the full message history *after* adding the optimistic message.
       messageHistoryForApi = chatStore.getActiveChatMessages().map(m => ({
         role: m.role,
@@ -212,20 +254,20 @@ export default function ChatPage() {
         stream: currentActiveSession.stream ?? true, // 添加流式响应设置
         clientProvidedApiKey: settingsStore.getApiKey(selectedProvider.id) || undefined,
         stop: currentActiveSession.stopSequences && currentActiveSession.stopSequences.length > 0 ? currentActiveSession.stopSequences : undefined,
-        jsonSchema: currentActiveSession.jsonSchema,
+        jsonSchema: currentActiveSession.structuredOutput ? currentActiveSession.jsonSchema : undefined,
         enableInputPreprocessing: appSettings.enableInputPreprocessing,
         // 添加启用的MCP服务器完整信息
         enabledMcpServers: (() => {
-          // 获取启用且已连接的MCP服务器完整信息
+          // Only use servers explicitly enabled for this session.
           const sessionEnabledIds = currentActiveSession.enabledMcpServers;
           if (sessionEnabledIds && sessionEnabledIds.length > 0) {
             return sessionEnabledIds
               .map(id => settingsStore.getMCPServerById(id))
+              // Filter for servers that exist, are enabled, connected, and have tools.
               .filter(s => s && s.isEnabled && s.status === 'connected' && s.tools && s.tools.length > 0);
-          } else {
-            return settingsStore.getEnabledMCPServers()
-              .filter(s => s.status === 'connected' && s.tools && s.tools.length > 0);
           }
+          // If the session has no servers enabled, return an empty array.
+          return [];
         })(),
       };
       
@@ -317,6 +359,12 @@ export default function ChatPage() {
               // 工具调用现在由后端处理，前端只需要等待tool_call_start/result/error事件
               console.log('收到工具调用:', parsedChunk.tool_calls);
               
+            } else if (parsedChunk.type === 'thinking') {
+              if (currentStreamAssistantMessageId) {
+                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                  isLoading: parsedChunk.thinking,
+                });
+              }
             } else if (parsedChunk.type === 'tool_call_start') {
               // 处理MCP工具调用开始事件
               if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {

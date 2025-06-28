@@ -149,12 +149,17 @@ export default function TreeholeAssistantPage() {
     setAction(actionType);
     setResponse('');
 
+    // 动态生成可用工具描述
+    const availableTools = isCrawlerOnline ?
+      '1. 树洞爬虫服务：用于获取树洞的最新帖子、收藏帖子和执行搜索\n' :
+      '';
+
     let systemPrompt = '';
     let userPrompt = '';
 
     switch (actionType) {
       case 'summary':
-        systemPrompt = `你是一个北大树洞信息助手，负责总结最近一天树洞上的高价值信息。
+        systemPrompt = `${availableTools}你是一个北大树洞信息助手，负责总结最近一天树洞上的高价值信息。
 请按照以下格式总结：
 1. 重要通知类（选课、考试、活动等）
 2. 热点讨论话题（按热度排序）
@@ -166,13 +171,13 @@ export default function TreeholeAssistantPage() {
         userPrompt = "请总结最近一天树洞的高价值信息。";
         break;
       case 'bookmarks':
-        systemPrompt = `你是一个北大树洞信息助手，负责总结用户收藏的树洞帖子。
+        systemPrompt = `${availableTools}你是一个北大树洞信息助手，负责总结用户收藏的树洞帖子。
 用户已经收藏了一些帖子，请按照时间倒序列出这些帖子，并为每个帖子提供一句话总结。
 注意：如果帖子有更新（如回复），请特别标注“有更新”并总结最新内容。`;
         userPrompt = "请总结我收藏的树洞帖子。";
         break;
       case 'query':
-        systemPrompt = `你是一个北大树洞信息助手，负责回答用户关于树洞信息的提问。
+        systemPrompt = `${availableTools}你是一个北大树洞信息助手，负责回答用户关于树洞信息的提问。
 你可以使用树洞爬虫工具搜索相关信息，然后根据搜索结果回答用户问题。
 回答要求：
 1. 直接回答问题，不要提及使用了工具

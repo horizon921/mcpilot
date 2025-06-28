@@ -71,8 +71,9 @@ export default function MathAssistantPage() {
     };
   });
 
-  const allToolsOnline = toolStatus.every(t => t.online);
-  const serverStatus = toolStatus; // 修复未定义变量
+  // 只要有一个工具在线即可使用
+  const anyToolOnline = toolStatus.some(t => t.online);
+  const serverStatus = toolStatus;
 
   // 初始化模型选择
   useEffect(() => {
@@ -186,17 +187,31 @@ export default function MathAssistantPage() {
 
   const handleSubmit = () => {
     if (!userInput.trim()) return;
-    if (!allToolsOnline) {
-      toast.error("所需MCP服务未全部在线，无法使用此功能");
+    if (!anyToolOnline) {
+      toast.error("没有可用的MCP服务，无法使用此功能");
       return;
     }
 
-    const systemPrompt = `你是一个专业的数学助手，专注于解决高等数学和线性代数问题。
-你可以使用以下工具：
-1. 计算器：用于数值计算
-2. Python解释器：用于执行数学计算和符号运算
-3. 网络搜索：用于查找数学概念和公式
+    // 动态生成可用工具描述
+    const availableTools = toolStatus
+      .filter(tool => tool.online)
+      .map(tool => {
+        switch (tool.name) {
+          case 'calculator':
+            return '1. 计算器：用于数值计算';
+          case 'python':
+            return '2. Python解释器：用于执行数学计算和符号运算';
+          case 'web_search':
+            return '3. 网络搜索：用于查找数学概念和公式';
+          default:
+            return '';
+        }
+      })
+      .filter(desc => desc !== '')
+      .join('\n');
 
+    const systemPrompt = `你是一个专业的数学助手，专注于解决高等数学和线性代数问题。
+${availableTools ? `你可以使用以下工具：\n${availableTools}\n` : ''}
 对于用户的问题，请按照以下步骤处理：
 1. 分析问题类型（代数、微积分、线性代数等）
 2. 根据问题复杂度决定是否使用工具
@@ -276,12 +291,12 @@ export default function MathAssistantPage() {
                 onChange={(e) => setUserInput(e.target.value)}
                 placeholder="输入数学问题，例如：计算∫(0到π) sin(x) dx"
                 rows={3}
-                disabled={loading || !allToolsOnline}
+                disabled={loading || !anyToolOnline}
               />
               <div className="mt-2 flex justify-end">
                 <Button 
                   onClick={handleSubmit} 
-                  disabled={loading || !userInput.trim() || !allToolsOnline}
+                  disabled={loading || !userInput.trim() || !anyToolOnline}
                   className="w-full md:w-auto"
                 >
                   {loading ? '思考中...' : '提交问题'}

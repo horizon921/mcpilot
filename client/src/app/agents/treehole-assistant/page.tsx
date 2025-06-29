@@ -85,6 +85,19 @@ export default function TreeholeAssistantPage() {
         { role: 'user', content: userPrompt }
       ];
       
+      // 获取启用的MCP服务 (树洞爬虫)
+      const enabledMcpServers = mcpServers.filter(server =>
+        server.status === 'connected' &&
+        (
+          server.name.toLowerCase().includes('treehole') ||
+          server.name.toLowerCase().includes('树洞') ||
+          (server.description && (
+            server.description.toLowerCase().includes('treehole') ||
+            server.description.toLowerCase().includes('树洞')
+          ))
+        )
+      );
+  
       const requestBody: any = {
         messages,
         modelNativeId: model.modelNativeId,
@@ -94,12 +107,19 @@ export default function TreeholeAssistantPage() {
         systemPrompt: systemPrompt,
         stream: true,
         clientProvidedApiKey: getApiKey(provider.id) || undefined,
+        enabledMcpServers: enabledMcpServers.map(server => ({
+          id: server.id,
+          name: server.name,
+          baseUrl: server.baseUrl,
+          parameters: server.parameters,
+          tools: server.tools
+        })),
       };
-
+  
       if (model.maxTokens) {
         requestBody.maxTokens = model.maxTokens;
       }
-
+  
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +148,25 @@ export default function TreeholeAssistantPage() {
             if (parsed.type === 'content_delta' && parsed.content) {
               onDelta(parsed.content);
             }
+            // 处理工具调用事件
+            else if (parsed.type === 'tool_calls' && parsed.tool_calls) {
+              // 更新响应状态
+              setResponse(prev => prev + '\n\n[正在调用工具...]');
+            }
+            else if (parsed.type === 'tool_call_result') {
+              // 以更友好的方式显示工具调用结果
+              let resultText = '';
+              try {
+                if (typeof parsed.result === 'string') {
+                  resultText = parsed.result;
+                } else {
+                  resultText = JSON.stringify(parsed.result, null, 2);
+                }
+              } catch (e) {
+                resultText = '工具调用成功（结果无法解析）';
+              }
+              setResponse(prev => prev + `\n\n[工具调用结果]:\n${resultText}`);
+            }
           } catch (e) {
             console.error("解析流块时出错:", e, "块:", jsonString);
           }
@@ -150,8 +189,9 @@ export default function TreeholeAssistantPage() {
     setResponse('');
 
     // 动态生成可用工具描述
+    // 使用与多功能聊天相同的工具描述格式
     const availableTools = isCrawlerOnline ?
-      '1. 树洞爬虫服务：用于获取树洞的最新帖子、收藏帖子和执行搜索\n' :
+      `- treehole_crawler: 用于获取树洞的最新帖子、收藏帖子和执行搜索\n  输入参数: {"operation": "string", "query": "string?}"}` :
       '';
 
     let systemPrompt = '';

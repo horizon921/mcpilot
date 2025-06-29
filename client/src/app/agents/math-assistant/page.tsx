@@ -19,7 +19,7 @@ export default function MathAssistantPage() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [userInput, setUserInput] = useState('');
   const [response, setResponse] = useState('');
-  const [history, setHistory] = useState<{role: string, content: string}[]>([]);
+  const [history, setHistory] = useState<Partial<Message>[]>([]);
   const { mcpServers } = useSettingsStore(state => ({ mcpServers: state.mcpServers }));
 
   const { models, providers, getModelById, getProviderById, getApiKey, appSettings } = useSettingsStore();
@@ -91,7 +91,7 @@ export default function MathAssistantPage() {
 
   const callChatAPIStream = async (
     systemPrompt: string,
-    userPrompt: string,
+    messages: Partial<Message>[],
     onStart: () => void,
     onDelta: (chunk: string) => void,
     onEnd: () => void
@@ -115,11 +115,22 @@ export default function MathAssistantPage() {
     setLoading(true);
 
     try {
-      const messages: Partial<Message>[] = [
-        ...history.map(h => ({ role: h.role as any, content: h.content })),
-        { role: 'user' as any, content: userPrompt }
-      ];
       
+      // 简化工具检测逻辑
+      const enabledMcpServers = mcpServers.filter(server =>
+        server.status === 'connected' &&
+        mathTools.some(mathTool => {
+          const hasKeywordMatch = mathTool.keywords.some(kw =>
+            server.name.toLowerCase().includes(kw) ||
+            (server.description && server.description.toLowerCase().includes(kw))
+          );
+          const hasToolMatch = server.tools?.some(tool =>
+            mathTool.keywords.some(kwTool => tool.name.toLowerCase().includes(kwTool))
+          );
+          return hasKeywordMatch || hasToolMatch;
+        })
+      );
+  
       const requestBody: any = {
         messages,
         modelNativeId: model.modelNativeId,
@@ -129,12 +140,19 @@ export default function MathAssistantPage() {
         systemPrompt: systemPrompt,
         stream: true,
         clientProvidedApiKey: getApiKey(provider.id) || undefined,
+        enabledMcpServers: enabledMcpServers.map(server => ({
+          id: server.id,
+          name: server.name,
+          baseUrl: server.baseUrl,
+          parameters: server.parameters,
+          tools: server.tools
+        })),
       };
-
+  
       if (model.maxTokens) {
         requestBody.maxTokens = model.maxTokens;
       }
-
+  
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,16 +183,31 @@ export default function MathAssistantPage() {
               onDelta(parsed.content);
               fullResponse += parsed.content;
             }
+            // 处理工具调用事件
+            else if (parsed.type === 'tool_calls' && parsed.tool_calls) {
+              // 更新历史记录
+              setHistory(prev => [
+                ...prev,
+                { role: 'assistant', content: '', tool_calls: parsed.tool_calls }
+              ]);
+            }
+            else if (parsed.type === 'tool_call_result') {
+              // 添加工具调用结果到历史记录
+              setHistory(prev => [
+                ...prev,
+                { role: 'tool', content: JSON.stringify(parsed.result), tool_call_id: parsed.tool_call_id }
+              ]);
+            }
           } catch (e) {
             console.error("解析流块时出错:", e, "块:", jsonString);
           }
         }
       }
 
-      // 更新历史记录
+      // 更新历史记录 - 使用userInput替代userPrompt
       setHistory(prev => [
         ...prev,
-        { role: 'user', content: userPrompt },
+        { role: 'user', content: userInput },
         { role: 'assistant', content: fullResponse }
       ]);
     } catch (error: any) {
@@ -210,20 +243,52 @@ export default function MathAssistantPage() {
       .filter(desc => desc !== '')
       .join('\n');
 
+    // 生成工具描述
+    const toolDescriptions = mathTools
+      .filter(mathTool => {
+        const status = toolStatus.find(t => t.name === mathTool.name);
+        return status?.online;
+      })
+      .map(mathTool => {
+        const server = mcpServers.find(s =>
+          s.status === 'connected' &&
+          s.tools?.some(t => t.name && mathTool.keywords.some(kw => t.name.toLowerCase().includes(kw)))
+        );
+        
+        if (!server) return '';
+        
+        const toolInfo = server.tools?.find(t =>
+          t.name && mathTool.keywords.some(kw => t.name.toLowerCase().includes(kw))
+        );
+        
+        return toolInfo
+          ? `- ${toolInfo.name}: ${toolInfo.description}\n  输入参数: ${JSON.stringify(toolInfo.input_schema)}`
+          : '';
+      })
+      .filter(desc => desc !== '')
+      .join('\n');
+
     const systemPrompt = `你是一个专业的数学助手，专注于解决高等数学和线性代数问题。
-${availableTools ? `你可以使用以下工具：\n${availableTools}\n` : ''}
-对于用户的问题，请按照以下步骤处理：
+${toolDescriptions ? `你可以使用以下工具：\n${toolDescriptions}\n` : ''}
+请遵循以下规则：
 1. 分析问题类型（代数、微积分、线性代数等）
 2. 根据问题复杂度决定是否使用工具
-3. 使用工具时，清晰说明使用的工具和计算过程
+3. 使用工具时，必须严格按照工具定义的输入格式
 4. 提供最终答案和详细解释
 
 请用中文回答，并使用数学符号和公式（LaTeX格式）清晰展示解题过程。
 `;
     
+    // 构建完整的聊天消息历史
+    const messages: Partial<Message>[] = [
+      ...history,
+      { role: 'user', content: userInput }
+    ];
+    
+    // 调用增强的API（支持工具调用）
     callChatAPIStream(
       systemPrompt,
-      userInput,
+      messages,
       () => { setResponse(''); },
       (delta) => setResponse(prev => prev + delta),
       () => { setUserInput(''); }

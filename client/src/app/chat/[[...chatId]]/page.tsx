@@ -190,7 +190,8 @@ export default function ChatPage() {
 
 
       // Add the new user message optimistically.
-      tempMessageId = chatStore.addOptimisticMessage(currentActiveChatId, messageContent, "user", TEMP_USER_PROFILE);
+      const optimisticContent = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent);
+      tempMessageId = chatStore.addOptimisticMessage(currentActiveChatId, optimisticContent, "user", TEMP_USER_PROFILE);
       // Get the full message history *after* adding the optimistic message.
       messageHistoryForApi = chatStore.getActiveChatMessages().map(m => ({
         role: m.role,
@@ -207,7 +208,9 @@ export default function ChatPage() {
     // They are crucial for correctly accumulating content for a single assistant message,
     // especially if multiple stream responses occur (e.g., initial response, then tool call, then final response).
     let currentStreamAssistantMessageId: string | null = null;
+    let messageIdForToolUpdates: string | null = null; // Dedicated ID for the message that contains tool calls
     let currentStreamAccumulatedContent = "";
+    let isFollowingUpAfterToolCalls = false; // Flag to indicate we are processing the final response after tools
 
     try {
       const modelEntryIdToUse = currentActiveSession.modelId || appSettings.defaultModelId;
@@ -290,7 +293,7 @@ export default function ChatPage() {
         const errorMessage = errorData.error || errorData.message || `API 错误: ${response.status}`;
         
         // 添加一个错误的AI助手消息，而不是覆盖用户消息
-        const errorAssistantMessage: Omit<MessageType, "id" | "createdAt" | "chatId"> = {
+        const errorAssistantMessage: Partial<Omit<MessageType, "chatId">> & Pick<MessageType, "role"> & { content: string | null } = {
           role: 'assistant',
           content: `抱歉，处理您的请求时遇到错误：${errorMessage}`,
           error: errorMessage,
@@ -342,12 +345,27 @@ export default function ChatPage() {
                 createdAt: new Date(parsedChunk.message.createdAt),
                 isLoading: true,
               });
-            } else if (parsedChunk.type === 'content_delta' && parsedChunk.content && currentStreamAssistantMessageId) {
-              currentStreamAccumulatedContent += parsedChunk.content;
-              freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
-                content: currentStreamAccumulatedContent,
-                isLoading: false, // 开始接收内容时立即停止loading状态
-              });
+            } else if (parsedChunk.type === 'content_delta' && parsedChunk.content) {
+                if (isFollowingUpAfterToolCalls && !currentStreamAssistantMessageId) {
+                    // This is the first piece of the *new* final response message.
+                    const newAssistantId = `ai-${Date.now()}`;
+                    currentStreamAssistantMessageId = newAssistantId;
+                    currentStreamAccumulatedContent = parsedChunk.content;
+                    freshChatStore.addMessage(freshActiveChatId, {
+                        id: newAssistantId,
+                        role: 'assistant',
+                        content: currentStreamAccumulatedContent,
+                        isLoading: false,
+                        createdAt: new Date(),
+                    });
+                } else if (currentStreamAssistantMessageId) {
+                    // This is a delta for an existing message (either the first turn or the new final response).
+                    currentStreamAccumulatedContent += parsedChunk.content;
+                    freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                        content: currentStreamAccumulatedContent,
+                        isLoading: false, // Stop loading as soon as content arrives.
+                    });
+                }
             } else if (parsedChunk.type === 'tool_calls' && parsedChunk.tool_calls && currentStreamAssistantMessageId) {
               // Update the current assistant message with the tool calls and any content received so far.
               freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
@@ -359,6 +377,14 @@ export default function ChatPage() {
               // 工具调用现在由后端处理，前端只需要等待tool_call_start/result/error事件
               console.log('收到工具调用:', parsedChunk.tool_calls);
               
+              // The message with this ID is now designated for tool call status updates.
+              messageIdForToolUpdates = currentStreamAssistantMessageId;
+              
+              // Reset state to prepare for a *new* assistant message for the final textual response.
+              currentStreamAssistantMessageId = null;
+              currentStreamAccumulatedContent = "";
+              isFollowingUpAfterToolCalls = true; // Set the flag
+
             } else if (parsedChunk.type === 'thinking') {
               if (currentStreamAssistantMessageId) {
                 freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
@@ -367,7 +393,8 @@ export default function ChatPage() {
               }
             } else if (parsedChunk.type === 'tool_call_start') {
               // 处理MCP工具调用开始事件
-              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
+              const messageToUpdateId = messageIdForToolUpdates;
+              if (messageToUpdateId && parsedChunk.tool_call_id) {
                 const toolCallStatus: import('@/types/chat').MCPToolCallStatus = {
                   tool_call_id: parsedChunk.tool_call_id,
                   tool_name: parsedChunk.tool_name || '未知工具',
@@ -377,7 +404,7 @@ export default function ChatPage() {
                 };
                 
                 // 更新消息，添加或更新MCP工具调用状态
-                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === messageToUpdateId);
                 const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
                 const updatedMcpToolCalls = [...existingMcpToolCalls];
                 
@@ -388,14 +415,15 @@ export default function ChatPage() {
                   updatedMcpToolCalls.push(toolCallStatus);
                 }
                 
-                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                freshChatStore.updateMessage(freshActiveChatId, messageToUpdateId, {
                   mcpToolCalls: updatedMcpToolCalls
                 });
               }
             } else if (parsedChunk.type === 'tool_call_result') {
               // 处理MCP工具调用结果事件
-              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
-                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+              const messageToUpdateId = messageIdForToolUpdates;
+              if (messageToUpdateId && parsedChunk.tool_call_id) {
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === messageToUpdateId);
                 const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
                 const updatedMcpToolCalls = existingMcpToolCalls.map(tc =>
                   tc.tool_call_id === parsedChunk.tool_call_id
@@ -408,14 +436,15 @@ export default function ChatPage() {
                     : tc
                 );
                 
-                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                freshChatStore.updateMessage(freshActiveChatId, messageToUpdateId, {
                   mcpToolCalls: updatedMcpToolCalls
                 });
               }
             } else if (parsedChunk.type === 'tool_call_error') {
               // 处理MCP工具调用错误事件
-              if (currentStreamAssistantMessageId && parsedChunk.tool_call_id) {
-                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === currentStreamAssistantMessageId);
+              const messageToUpdateId = messageIdForToolUpdates;
+              if (messageToUpdateId && parsedChunk.tool_call_id) {
+                const currentMessage = freshChatStore.messages[freshActiveChatId]?.find(m => m.id === messageToUpdateId);
                 const existingMcpToolCalls = currentMessage?.mcpToolCalls || [];
                 const updatedMcpToolCalls = existingMcpToolCalls.map(tc =>
                   tc.tool_call_id === parsedChunk.tool_call_id
@@ -428,7 +457,7 @@ export default function ChatPage() {
                     : tc
                 );
                 
-                freshChatStore.updateMessage(freshActiveChatId, currentStreamAssistantMessageId, {
+                freshChatStore.updateMessage(freshActiveChatId, messageToUpdateId, {
                   mcpToolCalls: updatedMcpToolCalls
                 });
               }
@@ -472,7 +501,7 @@ export default function ChatPage() {
       
       // 添加一个错误的AI助手消息
       if (finalActiveChatIdOnError) {
-        const errorAssistantMessage: Omit<MessageType, "id" | "createdAt" | "chatId"> = {
+        const errorAssistantMessage: Partial<Omit<MessageType, "chatId">> & Pick<MessageType, "role"> & { content: string | null } = {
           role: 'assistant',
           content: `抱歉，处理您的请求时遇到错误：${error.message || "发送失败"}`,
           error: error.message || "发送失败",

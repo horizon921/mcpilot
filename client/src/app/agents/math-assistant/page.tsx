@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/Common/Button';
-import { Input } from '@/components/Common/Input';
 import { Textarea } from '@/components/Common/Textarea';
 import { Label } from '@/components/Common/Label';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -10,72 +9,43 @@ import { ScrollArea } from '@/components/Common/ScrollArea';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Common/Select';
-import type { Message } from '@/types/chat';
-import { ArrowLeft, Check, Home, Calculator } from 'lucide-react';
+import type { Message, ToolCall, MCPToolCallStatus } from '@/types/chat';
+import { Home, Calculator, RefreshCw, CheckCircle, AlertCircle, Settings } from 'lucide-react';
 import Link from 'next/link';
+import MessageItem from '@/components/Chat/MessageItem'; // Import MessageItem
 
 export default function MathAssistantPage() {
   const [loading, setLoading] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [userInput, setUserInput] = useState('');
-  const [response, setResponse] = useState('');
-  const [history, setHistory] = useState<Partial<Message>[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const { mcpServers } = useSettingsStore(state => ({ mcpServers: state.mcpServers }));
 
   const { models, providers, getModelById, getProviderById, getApiKey, appSettings } = useSettingsStore();
 
-  // 检查所需的MCP服务是否在线
-  // 定义工具关键词列表（中英文）
   const mathTools = [
-    {
-      name: 'calculator',
-      keywords: ['calculator', '计算器', 'calcu', 'calc']
-    },
-    {
-      name: 'python',
-      keywords: ['python', 'py', '代码解释器', '代码执行', '解释器']
-    },
-    {
-      name: 'web_search',
-      keywords: ['web_search', 'web search', '网页搜索', '网络搜索', 'search']
-    }
+    { name: 'calculator', keywords: ['calculator', '计算器', 'calcu', 'calc'] },
+    { name: 'python', keywords: ['python', 'py', '代码解释器', '代码执行', '解释器'] },
+    { name: 'web_search', keywords: ['web_search', 'web search', '网页搜索', '网络搜索', 'search'] }
   ];
 
-  // 检查每个工具是否可用
-  // 检查每个工具是否可用
-  const toolStatus = mathTools.map(tool => {
+  const toolStatus = useMemo(() => mathTools.map(tool => {
     const isAvailable = mcpServers.some(server => {
       if (server.status !== 'connected') return false;
-      
-      // 检查服务名称或描述
-      const nameOrDescMatch = tool.keywords.some(kw => {
-        return (
-          server.name.toLowerCase().includes(kw) ||
-          (server.description && server.description.toLowerCase().includes(kw))
-        );
-      });
-      
-      // 检查工具名称
-      const toolNameMatch = server.tools?.some(t => {
-        return tool.keywords.some(kw =>
-          t.name.toLowerCase().includes(kw)
-        );
-      });
-      
+      const nameOrDescMatch = tool.keywords.some(kw =>
+        server.name.toLowerCase().includes(kw) ||
+        (server.description && server.description.toLowerCase().includes(kw))
+      );
+      const toolNameMatch = server.tools?.some(t =>
+        tool.keywords.some(kw => t.name.toLowerCase().includes(kw))
+      );
       return nameOrDescMatch || toolNameMatch;
     });
-    
-    return {
-      name: tool.name,
-      online: isAvailable
-    };
-  });
+    return { name: tool.name, online: isAvailable };
+  }), [mcpServers]);
 
-  // 只要有一个工具在线即可使用
-  const anyToolOnline = toolStatus.some(t => t.online);
-  const serverStatus = toolStatus;
+  const anyToolOnline = useMemo(() => toolStatus.some(t => t.online), [toolStatus]);
 
-  // 初始化模型选择
   useEffect(() => {
     if (!selectedModelId && appSettings.defaultModelId) {
       setSelectedModelId(appSettings.defaultModelId);
@@ -89,12 +59,9 @@ export default function MathAssistantPage() {
     }));
   }, [models, getProviderById]);
 
-  const callChatAPIStream = async (
+  const callChatAPI = async (
     systemPrompt: string,
-    messages: Partial<Message>[],
-    onStart: () => void,
-    onDelta: (chunk: string) => void,
-    onEnd: () => void
+    messageHistory: Partial<Message>[],
   ) => {
     if (!selectedModelId) {
       toast.error("请先选择一个模型");
@@ -111,48 +78,26 @@ export default function MathAssistantPage() {
       return;
     }
 
-    onStart();
     setLoading(true);
 
+    const enabledMcpServers = mcpServers.filter(server =>
+      server.isEnabled && server.status === 'connected' && server.tools && server.tools.length > 0
+    );
+
+    const requestBody = {
+      chatId: `agent-math-${Date.now()}`,
+      messages: messageHistory,
+      modelNativeId: model.modelNativeId,
+      providerId: provider.id,
+      providerType: provider.type,
+      baseUrl: provider.baseUrl,
+      systemPrompt: systemPrompt,
+      stream: true,
+      clientProvidedApiKey: getApiKey(provider.id) || undefined,
+      enabledMcpServers: enabledMcpServers, // Pass the full server objects
+    };
+
     try {
-      
-      // 简化工具检测逻辑
-      const enabledMcpServers = mcpServers.filter(server =>
-        server.status === 'connected' &&
-        mathTools.some(mathTool => {
-          const hasKeywordMatch = mathTool.keywords.some(kw =>
-            server.name.toLowerCase().includes(kw) ||
-            (server.description && server.description.toLowerCase().includes(kw))
-          );
-          const hasToolMatch = server.tools?.some(tool =>
-            mathTool.keywords.some(kwTool => tool.name.toLowerCase().includes(kwTool))
-          );
-          return hasKeywordMatch || hasToolMatch;
-        })
-      );
-  
-      const requestBody: any = {
-        messages,
-        modelNativeId: model.modelNativeId,
-        providerId: provider.id,
-        providerType: provider.type,
-        baseUrl: provider.baseUrl,
-        systemPrompt: systemPrompt,
-        stream: true,
-        clientProvidedApiKey: getApiKey(provider.id) || undefined,
-        enabledMcpServers: enabledMcpServers.map(server => ({
-          id: server.id,
-          name: server.name,
-          baseUrl: server.baseUrl,
-          parameters: server.parameters,
-          tools: server.tools
-        })),
-      };
-  
-      if (model.maxTokens) {
-        requestBody.maxTokens = model.maxTokens;
-      }
-  
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,7 +111,8 @@ export default function MathAssistantPage() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let fullResponse = '';
+      let currentAssistantMessageId: string | null = null;
+      let accumulatedContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -176,45 +122,53 @@ export default function MathAssistantPage() {
         const lines = chunk.split('\n\n').filter(line => line.startsWith('data: '));
 
         for (const line of lines) {
-          const jsonString = line.substring('data: '.length);
           try {
-            const parsed = JSON.parse(jsonString);
-            if (parsed.type === 'content_delta' && parsed.content) {
-              onDelta(parsed.content);
-              fullResponse += parsed.content;
-            }
-            // 处理工具调用事件
-            else if (parsed.type === 'tool_calls' && parsed.tool_calls) {
-              // 更新历史记录
-              setHistory(prev => [
-                ...prev,
-                { role: 'assistant', content: '', tool_calls: parsed.tool_calls }
-              ]);
-            }
-            else if (parsed.type === 'tool_call_result') {
-              // 添加工具调用结果到历史记录
-              setHistory(prev => [
-                ...prev,
-                { role: 'tool', content: JSON.stringify(parsed.result), tool_call_id: parsed.tool_call_id }
-              ]);
+            const parsed = JSON.parse(line.substring('data: '.length));
+
+            if (parsed.type === 'message_start') {
+              currentAssistantMessageId = parsed.message.id;
+              setMessages(prev => [...prev, {
+                id: parsed.message.id,
+                chatId: parsed.message.chatId,
+                role: 'assistant',
+                content: '',
+                createdAt: new Date(parsed.message.createdAt),
+                isLoading: true,
+              }]);
+            } else if (parsed.type === 'content_delta' && currentAssistantMessageId) {
+              accumulatedContent += parsed.content;
+              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, content: accumulatedContent, isLoading: false } : m));
+            } else if (parsed.type === 'tool_calls' && currentAssistantMessageId) {
+              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, tool_calls: parsed.tool_calls, isLoading: false } : m));
+            } else if (parsed.type === 'tool_call_start' && currentAssistantMessageId) {
+                const newStatus: MCPToolCallStatus = {
+                    tool_call_id: parsed.tool_call_id,
+                    tool_name: parsed.tool_name,
+                    server_name: parsed.server_name,
+                    status: 'calling',
+                    timestamp: new Date(),
+                };
+                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: [...(m.mcpToolCalls || []).filter(tc => tc.tool_call_id !== parsed.tool_call_id), newStatus] } : m));
+            } else if (parsed.type === 'tool_call_result' && currentAssistantMessageId) {
+                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: (m.mcpToolCalls || []).map(tc => tc.tool_call_id === parsed.tool_call_id ? { ...tc, status: 'success', result: parsed.result, timestamp: new Date() } : tc) } : m));
+            } else if (parsed.type === 'tool_call_error' && currentAssistantMessageId) {
+                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: (m.mcpToolCalls || []).map(tc => tc.tool_call_id === parsed.tool_call_id ? { ...tc, status: 'error', error: parsed.error, timestamp: new Date() } : tc) } : m));
+            } else if (parsed.type === 'message_end' && currentAssistantMessageId) {
+              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, isLoading: false } : m));
+            } else if (parsed.type === 'error') {
+              toast.error(`Stream error: ${parsed.error.message}`);
+              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, error: parsed.error.message, isLoading: false } : m));
             }
           } catch (e) {
-            console.error("解析流块时出错:", e, "块:", jsonString);
+            console.error("解析流块时出错:", e, "块:", line);
           }
         }
       }
-
-      // 更新历史记录 - 使用userInput替代userPrompt
-      setHistory(prev => [
-        ...prev,
-        { role: 'user', content: userInput },
-        { role: 'assistant', content: fullResponse }
-      ]);
     } catch (error: any) {
       toast.error(`请求失败: ${error.message}`);
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, chatId: '', role: 'assistant', content: `Error: ${error.message}`, createdAt: new Date(), error: error.message }]);
     } finally {
       setLoading(false);
-      onEnd();
     }
   };
 
@@ -225,74 +179,28 @@ export default function MathAssistantPage() {
       return;
     }
 
-    // 动态生成可用工具描述
-    const availableTools = toolStatus
-      .filter(tool => tool.online)
-      .map(tool => {
-        switch (tool.name) {
-          case 'calculator':
-            return '1. 计算器：用于数值计算';
-          case 'python':
-            return '2. Python解释器：用于执行数学计算和符号运算';
-          case 'web_search':
-            return '3. 网络搜索：用于查找数学概念和公式';
-          default:
-            return '';
-        }
-      })
-      .filter(desc => desc !== '')
-      .join('\n');
-
-    // 生成工具描述
-    const toolDescriptions = mathTools
-      .filter(mathTool => {
-        const status = toolStatus.find(t => t.name === mathTool.name);
-        return status?.online;
-      })
-      .map(mathTool => {
-        const server = mcpServers.find(s =>
-          s.status === 'connected' &&
-          s.tools?.some(t => t.name && mathTool.keywords.some(kw => t.name.toLowerCase().includes(kw)))
-        );
-        
-        if (!server) return '';
-        
-        const toolInfo = server.tools?.find(t =>
-          t.name && mathTool.keywords.some(kw => t.name.toLowerCase().includes(kw))
-        );
-        
-        return toolInfo
-          ? `- ${toolInfo.name}: ${toolInfo.description}\n  输入参数: ${JSON.stringify(toolInfo.input_schema)}`
-          : '';
-      })
-      .filter(desc => desc !== '')
-      .join('\n');
-
     const systemPrompt = `你是一个专业的数学助手，专注于解决高等数学和线性代数问题。
-${toolDescriptions ? `你可以使用以下工具：\n${toolDescriptions}\n` : ''}
 请遵循以下规则：
 1. 分析问题类型（代数、微积分、线性代数等）
 2. 根据问题复杂度决定是否使用工具
 3. 使用工具时，必须严格按照工具定义的输入格式
 4. 提供最终答案和详细解释
-
 请用中文回答，并使用数学符号和公式（LaTeX格式）清晰展示解题过程。
 `;
     
-    // 构建完整的聊天消息历史
-    const messages: Partial<Message>[] = [
-      ...history,
-      { role: 'user', content: userInput }
-    ];
+    const newUserMessage: Message = {
+      id: `user-${Date.now()}`,
+      chatId: '',
+      role: 'user',
+      content: userInput,
+      createdAt: new Date(),
+    };
+
+    const newMessages: Message[] = [...messages, newUserMessage];
+    setMessages(newMessages);
     
-    // 调用增强的API（支持工具调用）
-    callChatAPIStream(
-      systemPrompt,
-      messages,
-      () => { setResponse(''); },
-      (delta) => setResponse(prev => prev + delta),
-      () => { setUserInput(''); }
-    );
+    callChatAPI(systemPrompt, newMessages);
+    setUserInput('');
   };
 
   return (
@@ -341,13 +249,14 @@ ${toolDescriptions ? `你可以使用以下工具：\n${toolDescriptions}\n` : '
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-4xl mx-auto h-full flex flex-col">
-            <div className="flex-grow mb-4">
-              <ScrollArea className="h-full border rounded-lg p-4 bg-white dark:bg-gray-900">
-                <ReactMarkdown className="prose dark:prose-invert max-w-none">
-                  {response || "请提出您的数学问题，我将尽力解答..."}
-                </ReactMarkdown>
-              </ScrollArea>
-            </div>
+            <ScrollArea className="flex-grow mb-4">
+              <div className="p-4 space-y-4">
+                {messages.length === 0 && <div className="text-center text-gray-500">请提出您的数学问题...</div>}
+                {messages.map((msg) => (
+                  <MessageItem key={msg.id} message={msg} />
+                ))}
+              </div>
+            </ScrollArea>
             
             <div className="flex-shrink-0">
               <Label>数学问题</Label>
@@ -357,6 +266,12 @@ ${toolDescriptions ? `你可以使用以下工具：\n${toolDescriptions}\n` : '
                 placeholder="输入数学问题，例如：计算∫(0到π) sin(x) dx"
                 rows={3}
                 disabled={loading || !anyToolOnline}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
               />
               <div className="mt-2 flex justify-end">
                 <Button 

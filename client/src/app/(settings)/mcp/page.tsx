@@ -74,8 +74,11 @@ export default function MCPServersPage() {
   }, [updateMCPServerDetails]);
 
   useEffect(() => {
+    // This effect now runs whenever the mcpServers array changes.
+    // It probes servers that are enabled but don't have a 'connected' status.
+    // This handles initial probing and re-probing after an edit.
     mcpServers.forEach(server => {
-      if (server.isEnabled && (server.status === 'disconnected' || !server.status)) {
+      if (server.isEnabled && server.status !== 'connected') {
         probeServer(server);
       }
     });
@@ -112,10 +115,16 @@ export default function MCPServersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">MCP 服务管理</h1>
-        <Button onClick={handleAddNew}>
-          <PlusCircle size={18} className="mr-2" />
-          添加 MCP 服务
-        </Button>
+        <div className="flex space-x-2">
+          <Button variant="outline" onClick={() => mcpServers.forEach(s => s.isEnabled && probeServer(s))}>
+            <RefreshCw size={18} className="mr-2" />
+            全部刷新
+          </Button>
+          <Button onClick={handleAddNew}>
+            <PlusCircle size={18} className="mr-2" />
+            添加 MCP 服务
+          </Button>
+        </div>
       </div>
 
       {mcpServers.length === 0 ? (

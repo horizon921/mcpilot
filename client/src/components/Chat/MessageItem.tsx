@@ -193,7 +193,7 @@ const MessageItem: React.FC<MessageItemProps> = ({
       );
     }
 
-    if (isLoading && !content) {
+    if (isLoading && !content && (!message.tool_calls || message.tool_calls.length === 0)) {
       return <span className="italic text-gray-500">AI正在思考...</span>;
     }
 
@@ -201,8 +201,10 @@ const MessageItem: React.FC<MessageItemProps> = ({
       return <span className="text-red-500">错误: {error}</span>;
     }
 
-    if (!content) {
-      return null;
+    if (!content && (!message.tool_calls || message.tool_calls.length === 0)) {
+        // Only return null if there is absolutely nothing to render.
+        // If there are tool calls, we should still render the container.
+        return null;
     }
 
     const contentParts = Array.isArray(content) ? content : [{ type: 'text', text: content }];
@@ -210,13 +212,13 @@ const MessageItem: React.FC<MessageItemProps> = ({
     return (
       <div className="prose dark:prose-invert max-w-none space-y-4">
         {contentParts.map((part, index) => {
-          if (part.type === 'image') {
+          if (part.type === 'image' && 'src' in part) {
             return <img key={index} src={part.src} alt="User attachment" className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-700" />;
           }
-          if (part.type === 'text') {
+          if (part.type === 'text' && 'text' in part) {
             const katexExpressions: { placeholder: string; katexHtml: string; displayMode: boolean }[] = [];
             let placeholderIndex = 0;
-            let processedMdContent = part.text;
+            let processedMdContent = part.text || "";
             processedMdContent = processedMdContent.replace(/\$\$([\s\S]*?)\$\$/g, (match, latexExp) => {
               const placeholder = `__KATEX_BLOCK_PLACEHOLDER_${placeholderIndex++}__`;
               try {

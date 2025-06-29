@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, Content } from '@google/generative-ai'; // Import Gemini SDK
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, Content, Part } from '@google/generative-ai'; // Import Gemini SDK
 import Ajv, { ValidationError } from "ajv";
 import addFormats from "ajv-formats";
 import type { Message as ChatMessage, MessageRole, ContentPart } from '@/types/chat';
@@ -539,7 +539,7 @@ export async function POST(request: NextRequest) {
       messages.forEach(msg => {
         if (msg.content || (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) || msg.role === 'tool') {
           const mappedRole = mapRoleToOpenAI(msg.role);
-          if (mappedRole === 'system') { 
+          if (mappedRole === 'system') {
             if (typeof msg.content === 'string') openAIMessages.push({ role: 'system', content: msg.content });
           } else if (mappedRole === 'user') {
             if (typeof msg.content === 'string') {
@@ -558,15 +558,16 @@ export async function POST(request: NextRequest) {
             }
           } else if (mappedRole === 'assistant') {
             if (msg.tool_calls && msg.tool_calls.length > 0) {
-              openAIMessages.push({ role: 'assistant', content: msg.content || null, tool_calls: msg.tool_calls.map(tc => ({ id: tc.id, type: tc.type, function: { name: tc.function.name, arguments: tc.function.arguments } })) });
-            } else { 
+              const assistantContent = typeof msg.content === 'string' ? msg.content : null;
+              openAIMessages.push({ role: 'assistant', content: assistantContent, tool_calls: msg.tool_calls.map(tc => ({ id: tc.id, type: tc.type, function: { name: tc.function.name, arguments: tc.function.arguments } })) });
+            } else {
               if (typeof msg.content === 'string') openAIMessages.push({ role: 'assistant', content: msg.content });
             }
           } else if (mappedRole === 'tool') {
-            if (msg.tool_call_id && typeof msg.content === 'string') { 
-              openAIMessages.push({ role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id }); 
-            } else { 
-              console.warn("Tool message missing tool_call_id or content is not a string, skipping:", msg); 
+            if (msg.tool_call_id && typeof msg.content === 'string') {
+              openAIMessages.push({ role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id });
+            } else {
+              console.warn("Tool message missing tool_call_id or content is not a string, skipping:", msg);
             }
           }
         }
@@ -682,7 +683,7 @@ export async function POST(request: NextRequest) {
 
                     send({ id: assistantMsgId, type: 'thinking', thinking: true });
 
-                    const messagesWithToolResults = [
+                    const messagesWithToolResults: OpenAI.Chat.ChatCompletionMessageParam[] = [
                       ...openAIMessages,
                       {
                         role: 'assistant' as const,
@@ -816,7 +817,7 @@ export async function POST(request: NextRequest) {
                 (async () => {
                   try {
                     // 为每个工具调用创建工具结果消息
-                    const toolMessages = [];
+                    const toolMessages: OpenAI.Chat.ChatCompletionToolMessageParam[] = [];
 
                     for (const toolCall of choice.message.tool_calls!) {
                       try {
@@ -874,7 +875,7 @@ export async function POST(request: NextRequest) {
                       console.log('工具调用完成，重新请求模型以获取最终响应');
 
                       // 构建包含工具结果的消息历史
-                      const messagesWithToolResults = [
+                      const messagesWithToolResults: OpenAI.Chat.ChatCompletionMessageParam[] = [
                         ...openAIMessages,
                         {
                           role: 'assistant' as const,
@@ -936,26 +937,30 @@ export async function POST(request: NextRequest) {
       const anthropicMessages: Anthropic.Messages.MessageParam[] = messages
         .filter(msg => msg.role === 'user' || msg.role === 'assistant') // Anthropic only accepts user/assistant roles in messages array
         .map(msg => {
-          const content: Anthropic.Messages.MessageParam['content'] = [];
+          let content: Anthropic.Messages.MessageParam['content'];
           if (typeof msg.content === 'string') {
-            content.push({ type: 'text', text: msg.content });
+            content = msg.content;
           } else if (Array.isArray(msg.content)) {
-            msg.content.forEach(part => {
+            content = msg.content.map(part => {
               if (part.type === 'text') {
-                content.push({ type: 'text', text: part.text });
+                return { type: 'text', text: part.text };
               } else if (part.type === 'image' && part.src.startsWith('data:')) {
                 const [header, base64Data] = part.src.split(',');
                 const mediaType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                content.push({
+                return {
                   type: 'image',
                   source: {
                     type: 'base64',
-                    media_type: mediaType as Anthropic.Messages.ImageBlockSource['media_type'],
+                    media_type: mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
                     data: base64Data,
                   },
-                });
+                };
               }
-            });
+              // This case should ideally not be hit with proper typing, but it's a safe fallback.
+              return { type: 'text', text: '[unsupported content part]' };
+            }).filter(p => p !== null) as (Anthropic.TextBlock | Anthropic.ImageBlockParam)[];
+          } else {
+            content = ""; // Fallback for empty content
           }
           return { role: mapRoleToAnthropic(msg.role), content };
         });
@@ -1024,7 +1029,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          const parts: any[] = [];
+          const parts: Part[] = [];
           if (typeof msg.content === 'string') {
             parts.push({ text: msg.content });
           } else if (Array.isArray(msg.content)) {
@@ -1051,11 +1056,25 @@ export async function POST(request: NextRequest) {
         // The current logic uses startChat and then sendMessageStream with the last user message.
       }
 
-      const lastUserMessageContent = geminiHistory.length > 0 && geminiHistory[geminiHistory.length - 1].role === 'user'
-        ? geminiHistory.pop()!.parts[0].text // Pop last user message to use as prompt
-        : messages.filter(m => m.role === 'user').pop()?.content || "Hello"; // Fallback if history is empty or ends with model
+      const lastUserMessageParts: (string | Part)[] = [];
+      const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+      if (lastUserMessage && lastUserMessage.content) {
+          if (typeof lastUserMessage.content === 'string') {
+              lastUserMessageParts.push(lastUserMessage.content);
+          } else {
+              lastUserMessage.content.forEach(part => {
+                  if (part.type === 'text') {
+                      lastUserMessageParts.push(part.text);
+                  } else if (part.type === 'image' && part.src.startsWith('data:')) {
+                      const [header, base64Data] = part.src.split(',');
+                      const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                      lastUserMessageParts.push({ inlineData: { mimeType, data: base64Data } });
+                  }
+              });
+          }
+      }
 
-      if (!lastUserMessageContent) {
+      if (lastUserMessageParts.length === 0) {
         return NextResponse.json({ error: 'Gemini: No user message content to send.' }, { status: 400 });
       }
 
@@ -1069,7 +1088,7 @@ export async function POST(request: NextRequest) {
             stopSequences: stop // Added stopSequences
           },
         });
-        const result = await chat.sendMessageStream(lastUserMessageContent);
+        const result = await chat.sendMessageStream(lastUserMessageParts);
 
         const readableStream = new ReadableStream({
           async start(controller) {

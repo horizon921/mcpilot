@@ -41,43 +41,16 @@ export interface StreamError {
 }
 
 // For streaming chat responses
-export type ChatStreamChunk = 
-  | { type: 'message_start', message: { id: string, role: string, chatId: string, createdAt: string } }
-  | { type: 'content_delta', content: string, role: string }
-  | { type: 'message_end' }
-  | { type: 'tool_calls', tool_calls: any[] }
-  | { type: 'tool_call_start', tool_call_id: string, tool_name: string, server_name: string }
-  | { type: 'tool_call_result', tool_call_id: string, result: any }
-  | { type: 'tool_call_error', tool_call_id: string, error: any }
-  | { type: 'thinking', thinking: boolean }
-  | { type: 'error', error: StreamError };
-  id: string; // Message ID or chunk ID
-  type: "content_delta" | "tool_call_delta" | "tool_calls" | "tool_result" | "message_start" | "message_end" | "error" | "info" | "tool_call_start" | "tool_call_result" | "tool_call_error";
-  // For content_delta
-  role?: "assistant"; // Typically assistant for deltas
-  content?: string; // The delta content
-  // For tool_call_delta (individual parts of a tool call, if streamed)
-  tool_call_id?: string; // ID of the specific tool call being streamed
-  function_name_delta?: string;
-  function_args_delta?: string;
-  // For tool_calls (a complete set of tool calls from the AI)
-  tool_calls?: ToolCall[]; // Array of complete tool call objects
-  // For tool_result
-  tool_result_content?: string; // Full content of a tool result
-  tool_result_name?: string; // Name of the tool that produced the result
-  // For message_start
-  message?: {
-    id: string;
-    role: "assistant";
-    chatId: string;
-    createdAt: string; // ISO string date
-  };
-  // For error
-  error?: StreamError;
-  // For info
-  info_message?: string;
-  // For MCP tool call status
-  tool_name?: string; // Name of the MCP tool being called
-  server_name?: string; // Name of the MCP server
-  result?: string; // Tool call result (JSON string)
-}
+// The original type definition was syntactically incorrect. It has been corrected
+// to be a proper union type where each member includes an 'id' field. This 'id'
+// corresponds to the message ID and is required by the streaming logic in the API route.
+export type ChatStreamChunk =
+  | { id: string; type: 'message_start', message: { id: string, role: string, chatId: string, createdAt: string } }
+  | { id: string; type: 'content_delta', content: string, role: string }
+  | { id: string; type: 'message_end' }
+  | { id: string; type: 'tool_calls', tool_calls: any[] }
+  | { id: string; type: 'tool_call_start', tool_call_id: string, tool_name: string, server_name: string }
+  | { id: string; type: 'tool_call_result', tool_call_id: string, result: any }
+  | { id: string; type: 'tool_call_error', tool_call_id: string, error: any }
+  | { id: string; type: 'thinking', thinking: boolean }
+  | { id: string; type: 'error', error: StreamError };

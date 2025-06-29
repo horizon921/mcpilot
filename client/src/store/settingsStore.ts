@@ -193,17 +193,21 @@ export const useSettingsStore = create<SettingsStoreState>()(
         getMCPServerById: (serverId) => get().mcpServers.find(s => s.id === serverId),
         getEnabledMCPServers: () => get().mcpServers.filter(s => s.isEnabled),
         updateMCPServerDetails: (serverId, details) => {
-          set(state => ({
-            mcpServers: state.mcpServers.map(s =>
-              s.id === serverId ? {
-                ...s,
-                status: details.status,
-                errorDetails: details.errorDetails,
-                tools: details.tools,
-                updatedAt: new Date(), // Also update timestamp
-              } : s
-            ),
-          }));
+          set(state => {
+            const newMcpServers = state.mcpServers.map(s => {
+              if (s.id === serverId) {
+                return {
+                  ...s,
+                  status: details.status,
+                  errorDetails: details.errorDetails,
+                  tools: details.tools,
+                  updatedAt: new Date(), // Also update timestamp
+                };
+              }
+              return s;
+            });
+            return { mcpServers: newMcpServers };
+          });
         },
       }),
       {

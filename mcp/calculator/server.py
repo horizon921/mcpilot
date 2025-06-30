@@ -350,6 +350,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
 
         elif name == "advanced_calculate":
             operation = arguments.get("operation")
+            if not isinstance(operation, str):
+                return [TextContent(type="text", text=json.dumps({"success": False, "error": "Missing or invalid 'operation' argument"}, ensure_ascii=False, indent=2))]
             # 移除operation参数，其余作为kwargs传递
             kwargs = {k: v for k, v in arguments.items() if k != "operation"}
             result = calculator.advanced_calculate(operation, **kwargs)
@@ -364,8 +366,11 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
             return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
 
         elif name == "memory_operation":
+            operation = arguments.get("operation")
+            if not isinstance(operation, str):
+                return [TextContent(type="text", text=json.dumps({"success": False, "error": "Missing or invalid 'operation' argument"}, ensure_ascii=False, indent=2))]
             result = calculator.memory_operation(
-                arguments.get("operation"),
+                operation,
                 arguments.get("value")
             )
             return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
@@ -493,6 +498,8 @@ async def call_tool(request: ToolCallRequest) -> ToolResponse:
 
         elif request.tool_name == "advanced_calculate":
             operation = request.arguments.get("operation")
+            if not isinstance(operation, str):
+                return ToolResponse(success=False, error="Missing or invalid 'operation' argument")
             kwargs = {k: v for k, v in request.arguments.items() if k !=
                       "operation"}
             result = calculator.advanced_calculate(operation, **kwargs)
@@ -507,8 +514,11 @@ async def call_tool(request: ToolCallRequest) -> ToolResponse:
             return ToolResponse(success=True, data=result)
 
         elif request.tool_name == "memory_operation":
+            operation = request.arguments.get("operation")
+            if not isinstance(operation, str):
+                return ToolResponse(success=False, error="Missing or invalid 'operation' argument")
             result = calculator.memory_operation(
-                request.arguments.get("operation"),
+                operation,
                 request.arguments.get("value")
             )
             return ToolResponse(success=True, data=result)

@@ -8,42 +8,82 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { ScrollArea } from '@/components/Common/ScrollArea';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/Common/Select';
-import type { Message, MCPToolCallStatus } from '@/types/chat';
-import { Home, List, Bookmark, Search } from 'lucide-react';
+import { Home, List, Bookmark } from 'lucide-react';
 import Link from 'next/link';
-import MessageItem from '@/components/Chat/MessageItem'; // Import MessageItem
+import MessageItem from '@/components/Chat/MessageItem';
+import { useAgentChat } from '@/hooks/useAgentChat';
+import { useChatStore } from '@/store/chatStore';
+
+const TREEHOLE_AGENT_ID = 'treehole-assistant';
+const TREEHOLE_TOOLS = [
+  { name: 'treehole-crawler', keywords: ['treehole', '树洞'] }
+];
+
+const SYSTEM_PROMPTS = {
+  summary: `你是一个北大树洞信息助手，负责总结最近一天树洞上的高价值信息。
+请按照以下格式总结：
+1. 重要通知类（选课、考试、活动等）
+2. 热点讨论话题（按热度排序）
+3. 情感生活类（温馨、求助等）
+4. 学术科研类（论文、竞赛等）
+5. 其他有价值信息
+每类列出3-5条，每条用一句话概括，并注明原帖的大致时间（例如“昨天下午”、“昨晚”等）。`,
+  bookmarks: `你是一个北大树洞信息助手，负责总结用户收藏的树洞帖子。
+用户已经收藏了一些帖子，请按照时间倒序列出这些帖子，并为每个帖子提供一句话总结。
+注意：如果帖子有更新（如回复），请特别标注“有更新”并总结最新内容。`,
+  query: `你是一个北大树洞信息助手，负责回答用户关于树洞信息的提问。
+你可以使用树洞爬虫工具搜索相关信息，然后根据搜索结果回答用户问题。
+回答要求：
+1. 直接回答问题，不要提及使用了工具
+2. 引用树洞信息时注明发帖时间和大致内容
+3. 如果问题涉及多个帖子，请进行整合回答`,
+};
 
 export default function TreeholeAssistantPage() {
-  const [loading, setLoading] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [userInput, setUserInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
   const [action, setAction] = useState<'summary' | 'bookmarks' | 'query'>('summary');
-  const { mcpServers } = useSettingsStore(state => ({ mcpServers: state.mcpServers }));
+  const { models, getProviderById, appSettings } = useSettingsStore();
+  const { clearChatMessages } = useChatStore();
 
-  const isCrawlerOnline = useMemo(() => mcpServers.some(server =>
-    server.status === 'connected' &&
-    (
-      (server.name.toLowerCase().includes('treehole') ||
-       server.name.toLowerCase().includes('树洞') ||
-       (server.description && (
-          server.description.toLowerCase().includes('treehole') ||
-          server.description.toLowerCase().includes('树洞')
-       ))) ||
-      (server.tools && server.tools.some(tool =>
-        tool.name.toLowerCase().includes('treehole') ||
-        tool.name.toLowerCase().includes('树洞')
-      ))
-    )
-  ), [mcpServers]);
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    toolStatus,
+    anyToolOnline,
+    session,
+    updateChatSessionSettings,
+  } = useAgentChat({
+    agentId: TREEHOLE_AGENT_ID,
+    systemPrompt: SYSTEM_PROMPTS[action],
+    requiredTools: TREEHOLE_TOOLS,
+  });
 
-  const { models, providers, getModelById, getProviderById, getApiKey, appSettings } = useSettingsStore();
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+
+  const isCrawlerOnline = useMemo(() => toolStatus.find(t => t.name === 'treehole-crawler')?.online ?? false, [toolStatus]);
 
   useEffect(() => {
-    if (!selectedModelId && appSettings.defaultModelId) {
-      setSelectedModelId(appSettings.defaultModelId);
+    if (session) {
+      updateChatSessionSettings(session.id, { systemPrompt: SYSTEM_PROMPTS[action] });
     }
-  }, [selectedModelId, appSettings.defaultModelId]);
+  }, [action, session, updateChatSessionSettings]);
+
+  useEffect(() => {
+    if (session && appSettings.defaultModelId && !session.modelId) {
+      setSelectedModelId(appSettings.defaultModelId);
+      updateChatSessionSettings(session.id, { modelId: appSettings.defaultModelId });
+    } else if (session?.modelId) {
+      setSelectedModelId(session.modelId);
+    }
+  }, [session, appSettings.defaultModelId, updateChatSessionSettings]);
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModelId(modelId);
+    if (session) {
+      updateChatSessionSettings(session.id, { modelId });
+    }
+  };
 
   const modelOptions = useMemo(() => {
     return models.map(model => ({
@@ -52,175 +92,35 @@ export default function TreeholeAssistantPage() {
     }));
   }, [models, getProviderById]);
 
-  const callChatAPI = async (
-    systemPrompt: string,
-    messageHistory: Partial<Message>[],
-  ) => {
-    if (!selectedModelId) {
-      toast.error("请先选择一个模型");
-      return;
-    }
-    const model = getModelById(selectedModelId);
-    if (!model) {
-      toast.error(`未找到ID为 ${selectedModelId} 的模型配置`);
-      return;
-    }
-    const provider = getProviderById(model.providerId);
-    if (!provider) {
-      toast.error("找不到模型对应的提供商");
-      return;
-    }
-
-    setLoading(true);
-
-    const enabledMcpServers = mcpServers.filter(server =>
-      server.isEnabled && server.status === 'connected' && server.tools && server.tools.length > 0 &&
-      (server.name.toLowerCase().includes('treehole') || server.name.toLowerCase().includes('树洞'))
-    );
-
-    const requestBody = {
-      chatId: `agent-treehole-${Date.now()}`,
-      messages: messageHistory,
-      modelNativeId: model.modelNativeId,
-      providerId: provider.id,
-      providerType: provider.type,
-      baseUrl: provider.baseUrl,
-      systemPrompt: systemPrompt,
-      stream: true,
-      clientProvidedApiKey: getApiKey(provider.id) || undefined,
-      enabledMcpServers: enabledMcpServers,
-    };
-
-    try {
-      const response = await fetch('/api/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok || !response.body) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `API 错误: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let currentAssistantMessageId: string | null = null;
-      let accumulatedContent = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n\n').filter(line => line.startsWith('data: '));
-
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line.substring('data: '.length));
-
-            if (parsed.type === 'message_start') {
-              currentAssistantMessageId = parsed.message.id;
-              setMessages(prev => [...prev, {
-                id: parsed.message.id,
-                chatId: parsed.message.chatId,
-                role: 'assistant',
-                content: '',
-                createdAt: new Date(parsed.message.createdAt),
-                isLoading: true,
-              }]);
-            } else if (parsed.type === 'content_delta' && currentAssistantMessageId) {
-              accumulatedContent += parsed.content;
-              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, content: accumulatedContent, isLoading: false } : m));
-            } else if (parsed.type === 'tool_calls' && currentAssistantMessageId) {
-              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, tool_calls: parsed.tool_calls, isLoading: false } : m));
-            } else if (parsed.type === 'tool_call_start' && currentAssistantMessageId) {
-                const newStatus: MCPToolCallStatus = {
-                    tool_call_id: parsed.tool_call_id,
-                    tool_name: parsed.tool_name,
-                    server_name: parsed.server_name,
-                    status: 'calling',
-                    timestamp: new Date(),
-                };
-                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: [...(m.mcpToolCalls || []).filter(tc => tc.tool_call_id !== parsed.tool_call_id), newStatus] } : m));
-            } else if (parsed.type === 'tool_call_result' && currentAssistantMessageId) {
-                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: (m.mcpToolCalls || []).map(tc => tc.tool_call_id === parsed.tool_call_id ? { ...tc, status: 'success', result: parsed.result, timestamp: new Date() } : tc) } : m));
-            } else if (parsed.type === 'tool_call_error' && currentAssistantMessageId) {
-                setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, mcpToolCalls: (m.mcpToolCalls || []).map(tc => tc.tool_call_id === parsed.tool_call_id ? { ...tc, status: 'error', error: parsed.error, timestamp: new Date() } : tc) } : m));
-            } else if (parsed.type === 'message_end' && currentAssistantMessageId) {
-              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, isLoading: false } : m));
-            } else if (parsed.type === 'error') {
-              toast.error(`Stream error: ${parsed.error.message}`);
-              setMessages(prev => prev.map(m => m.id === currentAssistantMessageId ? { ...m, error: parsed.error.message, isLoading: false } : m));
-            }
-          } catch (e) {
-            console.error("解析流块时出错:", e, "块:", line);
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(`请求失败: ${error.message}`);
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, chatId: '', role: 'assistant', content: `Error: ${error.message}`, createdAt: new Date(), error: error.message }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAction = (actionType: 'summary' | 'bookmarks' | 'query') => {
     if (!isCrawlerOnline) {
       toast.error("树洞爬虫服务未在线，无法使用此功能");
       return;
     }
     setAction(actionType);
-    setMessages([]); // Clear previous messages
+    if (session) {
+      clearChatMessages(session.id);
+    }
 
-    let systemPrompt = '';
     let userPrompt = '';
-
     switch (actionType) {
       case 'summary':
-        systemPrompt = `你是一个北大树洞信息助手，负责总结最近一天树洞上的高价值信息。
-请按照以下格式总结：
-1. 重要通知类（选课、考试、活动等）
-2. 热点讨论话题（按热度排序）
-3. 情感生活类（温馨、求助等）
-4. 学术科研类（论文、竞赛等）
-5. 其他有价值信息
-每类列出3-5条，每条用一句话概括，并注明原帖的大致时间（例如“昨天下午”、“昨晚”等）。`;
         userPrompt = "请总结最近一天树洞的高价值信息。";
+        sendMessage(userPrompt);
         break;
       case 'bookmarks':
-        systemPrompt = `你是一个北大树洞信息助手，负责总结用户收藏的树洞帖子。
-用户已经收藏了一些帖子，请按照时间倒序列出这些帖子，并为每个帖子提供一句话总结。
-注意：如果帖子有更新（如回复），请特别标注“有更新”并总结最新内容。`;
         userPrompt = "请总结我收藏的树洞帖子。";
+        sendMessage(userPrompt);
         break;
       case 'query':
         if (!userInput.trim()) {
           toast.error("请输入问题");
           return;
         }
-        systemPrompt = `你是一个北大树洞信息助手，负责回答用户关于树洞信息的提问。
-你可以使用树洞爬虫工具搜索相关信息，然后根据搜索结果回答用户问题。
-回答要求：
-1. 直接回答问题，不要提及使用了工具
-2. 引用树洞信息时注明发帖时间和大致内容
-3. 如果问题涉及多个帖子，请进行整合回答`;
-        userPrompt = userInput;
+        sendMessage(userInput);
+        setUserInput('');
         break;
     }
-
-    const newUserMessage: Message = {
-      id: `user-${Date.now()}`,
-      chatId: '',
-      role: 'user',
-      content: userPrompt,
-      createdAt: new Date(),
-    };
-
-    setMessages([newUserMessage]);
-    callChatAPI(systemPrompt, [newUserMessage]);
-    if (actionType === 'query') setUserInput('');
   };
 
   return (
@@ -249,20 +149,20 @@ export default function TreeholeAssistantPage() {
           </div>
 
           <div className="space-y-2">
-            <Button 
-              variant={action === 'summary' ? 'default' : 'outline'} 
+            <Button
+              variant={action === 'summary' ? 'default' : 'outline'}
               className="w-full justify-start"
               onClick={() => handleAction('summary')}
-              disabled={loading}
+              disabled={isLoading}
             >
               <List size={16} className="mr-2" />
               总结最近树洞
             </Button>
-            <Button 
-              variant={action === 'bookmarks' ? 'default' : 'outline'} 
+            <Button
+              variant={action === 'bookmarks' ? 'default' : 'outline'}
               className="w-full justify-start"
               onClick={() => handleAction('bookmarks')}
-              disabled={loading}
+              disabled={isLoading}
             >
               <Bookmark size={16} className="mr-2" />
               收藏帖子总结
@@ -275,7 +175,7 @@ export default function TreeholeAssistantPage() {
         <header className="flex-shrink-0 p-4 border-b dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="max-w-md mx-auto">
             <Label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">选择模型</Label>
-            <Select onValueChange={setSelectedModelId} value={selectedModelId || ''}>
+            <Select onValueChange={handleModelChange} value={selectedModelId || ''}>
               <SelectTrigger><SelectValue placeholder="选择一个AI模型..." /></SelectTrigger>
               <SelectContent>
                 {modelOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
@@ -299,11 +199,11 @@ export default function TreeholeAssistantPage() {
               <div className="flex-shrink-0">
                 <Label>关于树洞的问题</Label>
                 <Textarea 
-                  value={userInput} 
+                  value={userInput}
                   onChange={(e) => setUserInput(e.target.value)}
                   placeholder="输入关于树洞的问题，例如：最近有人讨论端午节活动吗？"
                   rows={3}
-                  disabled={loading || !isCrawlerOnline}
+                  disabled={isLoading || !isCrawlerOnline}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -312,12 +212,12 @@ export default function TreeholeAssistantPage() {
                   }}
                 />
                 <div className="mt-2 flex justify-end">
-                  <Button 
-                    onClick={() => handleAction('query')} 
-                    disabled={loading || !userInput.trim() || !isCrawlerOnline}
+                  <Button
+                    onClick={() => handleAction('query')}
+                    disabled={isLoading || !userInput.trim() || !isCrawlerOnline}
                     className="w-full md:w-auto"
                   >
-                    {loading ? '查询中...' : '查询'}
+                    {isLoading ? '查询中...' : '查询'}
                   </Button>
                 </div>
               </div>

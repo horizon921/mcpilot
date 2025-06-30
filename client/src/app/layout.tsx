@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "@/styles/globals.css"; // Global styles
 import ThemeProvider from "@/components/Theme/ThemeProvider"; // Assuming ThemeProvider path
 import { Toaster } from "@/components/Common/Toaster"; // Global Toaster
+import AppInitializer from "@/components/App/AppInitializer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -60,6 +61,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <AppInitializer />
           {children}
           <Toaster /> {/* Global Toaster can be here */}
         </ThemeProvider>

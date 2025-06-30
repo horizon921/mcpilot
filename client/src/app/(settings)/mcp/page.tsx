@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react'; // Added useEffect, useCallback
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { MCPServerInfo, MCPToolDefinition } from '@/types/mcp'; // Changed MCPToolInfo to MCPToolDefinition
+import type { MCPServerInfo, MCPToolDefinition } from '@/types/mcp';
 import { Button } from '@/components/Common/Button';
 import MCPServerFormModal from '@/components/Settings/MCPServerFormModal';
-import { PlusCircle, Edit3, Trash2, Power, PowerOff, CheckCircle2, XCircle, AlertCircle, HelpCircle, ListTree, RefreshCw, MinusCircle } from 'lucide-react'; // Added MinusCircle
+import { PlusCircle, Edit3, Trash2, Power, PowerOff, CheckCircle2, XCircle, AlertCircle, HelpCircle, ListTree, RefreshCw, MinusCircle } from 'lucide-react';
 import { Switch } from '@/components/Common/Switch';
+import { toast } from 'sonner';
 
 export default function MCPServersPage() {
-  const { mcpServers, removeMCPServer, toggleMCPServerEnabled, updateMCPServerDetails } = useSettingsStore(); // Added updateMCPServerDetails
+  const { mcpServers, removeMCPServer, toggleMCPServerEnabled, refreshMCPServerStatuses } = useSettingsStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<MCPServerInfo | null>(null);
-  const [probingServers, setProbingServers] = useState<Record<string, boolean>>({}); // Track probing status
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleAddNew = () => {
     setEditingServer(null);
@@ -30,85 +31,21 @@ export default function MCPServersPage() {
     }
   };
 
-  const probeServer = useCallback(async (server: MCPServerInfo) => {
-    if (!server.baseUrl) {
-      updateMCPServerDetails(server.id, { status: 'error', errorDetails: 'Base URL 未配置', tools: [] });
-      return;
-    }
-    setProbingServers(prev => ({ ...prev, [server.id]: true }));
-    try {
-      // 通过我们的API路由来获取MCP服务器信息，避免CORS问题
-      const apiUrl = `/api/mcp/info?baseUrl=${encodeURIComponent(server.baseUrl)}`;
-      
-      console.log(`Probing MCP server ${server.name} through API proxy`);
-      const response = await fetch(apiUrl, { cache: 'no-store' }); // Disable cache for probing
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `服务器响应错误: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json();
-      
-      // Validate data structure (example validation)
-      if (!data || typeof data.name !== 'string' || !Array.isArray(data.tools)) {
-        console.error("MCP Server Info response format invalid:", data);
-        throw new Error("无效的服务器信息响应格式");
-      }
-
-      updateMCPServerDetails(server.id, {
-        status: 'connected',
-        tools: data.tools as MCPToolDefinition[],
-        errorDetails: undefined
-        // name and description are not updated here; they are managed via MCPServerFormModal
-      });
-    } catch (error: any) {
-      console.error(`探测 MCP 服务 ${server.name} (${server.id}) 失败:`, error);
-      updateMCPServerDetails(server.id, {
-        status: 'error',
-        errorDetails: error.message || '连接或解析信息失败',
-        tools: [] // Clear tools on error
-      });
-    } finally {
-      setProbingServers(prev => ({ ...prev, [server.id]: false }));
-    }
-  }, [updateMCPServerDetails]);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    toast.info("正在刷新所有MCP服务状态...");
+    await refreshMCPServerStatuses();
+    toast.success("状态刷新完成！");
+    setIsRefreshing(false);
+  }, [refreshMCPServerStatuses]);
 
   useEffect(() => {
-    // This effect now runs whenever the mcpServers array changes.
-    // It probes servers that are enabled but don't have a 'connected' status.
-    // This handles initial probing and re-probing after an edit.
-    mcpServers.forEach(server => {
-      if (server.isEnabled && server.status !== 'connected') {
-        probeServer(server);
-      }
-    });
-  }, [mcpServers, probeServer]);
-
-  // 添加定期探测机制，每30秒检查一次已启用的服务器状态
-  useEffect(() => {
-    const interval = setInterval(() => {
-      mcpServers.forEach(server => {
-        if (server.isEnabled) {
-          console.log(`定期探测服务器: ${server.name}`);
-          probeServer(server);
-        }
-      });
-    }, 30000); // 30秒
-
-    return () => clearInterval(interval);
-  }, [mcpServers, probeServer]);
+    handleRefresh();
+  }, [handleRefresh]);
 
   const handleToggleEnabled = (serverId: string, currentIsEnabled: boolean | undefined) => {
-    const newIsEnabled = !currentIsEnabled;
-    toggleMCPServerEnabled(serverId, newIsEnabled);
-    const serverToProbe = mcpServers.find(s => s.id === serverId);
-    if (newIsEnabled && serverToProbe) {
-      // Set status to disconnected to trigger probe by useEffect, or probe directly
-      updateMCPServerDetails(serverId, { status: 'disconnected', tools: [], errorDetails: "等待探测..." });
-      probeServer(serverToProbe);
-    } else if (!newIsEnabled && serverToProbe) {
-      updateMCPServerDetails(serverId, { status: 'disconnected', tools: [], errorDetails: undefined });
-    }
+    toggleMCPServerEnabled(serverId, !currentIsEnabled);
+    setTimeout(() => refreshMCPServerStatuses(), 100);
   };
 
   return (
@@ -116,9 +53,9 @@ export default function MCPServersPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">MCP 服务管理</h1>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => mcpServers.forEach(s => s.isEnabled && probeServer(s))}>
-            <RefreshCw size={18} className="mr-2" />
-            全部刷新
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+            <RefreshCw size={18} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? '刷新中...' : '全部刷新'}
           </Button>
           <Button onClick={handleAddNew}>
             <PlusCircle size={18} className="mr-2" />
@@ -154,7 +91,7 @@ export default function MCPServersPage() {
                         checked={!!server.isEnabled}
                         onCheckedChange={() => handleToggleEnabled(server.id, server.isEnabled)}
                         id={`enable-mcp-${server.id}`}
-                        className="transform scale-75" // Make switch smaller
+                        className="transform scale-75"
                       />
                    </div>
                 </div>

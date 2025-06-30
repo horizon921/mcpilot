@@ -51,6 +51,7 @@ export interface SettingsStoreState {
   getMCPServerById: (serverId: string) => MCPServerInfo | undefined;
   getEnabledMCPServers: () => MCPServerInfo[];
   updateMCPServerDetails: (serverId: string, details: { status: MCPServerInfo['status']; errorDetails?: string; tools?: MCPServerInfo['tools'] }) => void; // New action
+  refreshMCPServerStatuses: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsStoreState>()(
@@ -208,6 +209,55 @@ export const useSettingsStore = create<SettingsStoreState>()(
             });
             return { mcpServers: newMcpServers };
           });
+        },
+        refreshMCPServerStatuses: async () => {
+          const { mcpServers } = get();
+          if (mcpServers.length === 0) return;
+
+          try {
+            const response = await fetch('/api/mcp/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                servers: mcpServers.map(s => ({ id: s.id, baseUrl: s.baseUrl })),
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const statuses: { id: string; status: 'connected' | 'error'; info?: any; error?: string }[] = await response.json();
+
+            set(state => {
+              const updatedServers = state.mcpServers.map(server => {
+                const result = statuses.find(s => s.id === server.id);
+                if (result) {
+                  return {
+                    ...server,
+                    status: result.status,
+                    tools: result.status === 'connected' ? result.info?.tools : undefined,
+                    errorDetails: result.status === 'error' ? result.error : undefined,
+                    updatedAt: new Date(),
+                  };
+                }
+                return server;
+              });
+              return { mcpServers: updatedServers };
+            });
+
+          } catch (error) {
+            console.error("Failed to refresh MCP server statuses:", error);
+            // Optionally set all to error status
+            set(state => ({
+              mcpServers: state.mcpServers.map(s => ({
+                ...s,
+                status: 'error',
+                errorDetails: 'Failed to refresh status.',
+                updatedAt: new Date(),
+              })),
+            }));
+          }
         },
       }),
       {
